@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Cairo';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/cairo/v28/SLXVc1nY6HkvangtZmpy.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Reem Kufi';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/reemkufi/v24/2sDcZGJLip7W2J7v7wQDbw.woff2') format('woff2');
+}
+
+@layer base {
+  :root {
+    --background: 60 20% 98%;
+    --foreground: 240 27% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 27% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 27% 14%;
+    --primary: 159 76% 22%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 44 84% 94%;
+    --secondary-foreground: 240 27% 14%;
+    --muted: 60 14% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 159 76% 93%;
+    --accent-foreground: 159 76% 22%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 11% 88%;
+    --input: 60 11% 88%;
+    --ring: 159 76% 22%;
+    --radius: 0.75rem;
+    --chart-1: 159 76% 22%;
+    --chart-2: 44 72% 47%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 217 91% 60%;
+    --chart-5: 38 92% 50%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 27% 14%;
+    --sidebar-primary: 159 76% 22%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 159 76% 93%;
+    --sidebar-accent-foreground: 159 76% 22%;
+    --sidebar-border: 60 11% 88%;
+    --sidebar-ring: 159 76% 22%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    direction: rtl;
+    text-align: right;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F5F0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C4C4B8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Line clamp */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Islamic geometric pattern */
+.geometric-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M30 0L60 30L30 60L0 30L30 0zM30 10L50 30L30 50L10 30L30 10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Animation classes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.5s ease-out forwards;
+}
+
+/* Stagger delays */
+.stagger-1 { animation-delay: 0.08s; }
+.stagger-2 { animation-delay: 0.16s; }
+.stagger-3 { animation-delay: 0.24s; }
+.stagger-4 { animation-delay: 0.32s; }
+.stagger-5 { animation-delay: 0.40s; }
+
+/* Card hover */
+.card-hover {
+  transition: all 0.3s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+}
