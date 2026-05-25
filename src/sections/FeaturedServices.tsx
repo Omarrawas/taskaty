@@ -1,10 +1,10 @@
 import { Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import ServiceCard from "@/components/cards/ServiceCard";
-import { services } from "@/lib/mockData";
+import { trpc } from "@/providers/trpc";
 
 export default function FeaturedServices() {
-  const featured = services.filter((s) => s.featured);
+  const { data: featured, isLoading } = trpc.services.featured.useQuery();
 
   return (
     <section className="py-20 bg-white">
@@ -19,28 +19,37 @@ export default function FeaturedServices() {
             <ArrowLeft className="w-4 h-4" />
           </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featured.map((service, i) => (
-            <div
-              key={service.id}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
-            >
-              <ServiceCard
-                id={service.id}
-                sellerId={service.sellerId}
-                title={service.title}
-                slug={service.slug}
-                price={service.price}
-                images={service.images}
-                rating={service.rating}
-                totalReviews={service.totalReviews}
-                featured={service.featured}
-                deliveryTime={service.deliveryTime}
-              />
-            </div>
-          ))}
-        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-64 bg-gray-100 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {(featured ?? []).map((service, i) => (
+              <div
+                key={service.id}
+                className="animate-fade-in-up"
+                style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
+              >
+                <ServiceCard
+                  id={service.id}
+                  sellerId={service.sellerId}
+                  title={service.title}
+                  slug={service.slug ?? ""}
+                  price={service.price}
+                  images={service.images as string[] ?? []}
+                  rating={service.rating ?? "0"}
+                  totalReviews={service.totalReviews ?? 0}
+                  featured={service.featured ?? false}
+                  deliveryTime={service.deliveryTime ?? 3}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

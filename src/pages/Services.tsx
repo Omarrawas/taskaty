@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import ServiceCard from "@/components/cards/ServiceCard";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { services, categories } from "@/lib/mockData";
+import { trpc } from "@/providers/trpc";
 
 export default function Services() {
   const [searchParams] = useSearchParams();
@@ -19,37 +19,23 @@ export default function Services() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [minRating, setMinRating] = useState(0);
-  const [sortBy, setSortBy] = useState("popular");
+  const [sortBy, setSortBy] = useState<any>("popular");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const filteredServices = useMemo(() => {
-    let result = [...services];
+  const { data: categoriesData } = trpc.categories.list.useQuery();
+  const categories = categoriesData ?? [];
 
-    if (query) {
-      const q = query.toLowerCase();
-      result = result.filter((s) => s.title.toLowerCase().includes(q) || s.tags?.some((t) => t.toLowerCase().includes(q)));
-    }
+  const { data: servicesData, isLoading } = trpc.services.list.useQuery({
+    categorySlug: selectedCategory || undefined,
+    search: query || undefined,
+    minPrice: minPrice ? parseFloat(minPrice) : undefined,
+    maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+    minRating: minRating || undefined,
+    sort: sortBy,
+  });
 
-    if (selectedCategory) {
-      const cat = categories.find((c) => c.slug === selectedCategory);
-      if (cat) {
-        result = result.filter((s) => s.categoryId === cat.id);
-      }
-    }
-
-    if (minPrice) result = result.filter((s) => parseFloat(s.price) >= parseFloat(minPrice));
-    if (maxPrice) result = result.filter((s) => parseFloat(s.price) <= parseFloat(maxPrice));
-    if (minRating > 0) result = result.filter((s) => parseFloat(s.rating) >= minRating);
-
-    if (sortBy === "popular") result.sort((a, b) => b.totalOrders - a.totalOrders);
-    else if (sortBy === "newest") result.sort((a, b) => b.id - a.id);
-    else if (sortBy === "rating") result.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
-    else if (sortBy === "price_asc") result.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-    else if (sortBy === "price_desc") result.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-
-    return result;
-  }, [query, selectedCategory, minPrice, maxPrice, minRating, sortBy]);
+  const filteredServices = servicesData?.rows ?? [];
 
   const clearFilters = () => {
     setQuery("");
@@ -115,7 +101,7 @@ export default function Services() {
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
-                      onClick={() => setSelectedCategory(selectedCategory === cat.slug ? "" : cat.slug)}
+                      onClick={() => setSelectedCategory(selectedCategory === cat.slug ? "" : cat.slug ?? "")}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                         selectedCategory === cat.slug
                           ? "bg-[#E8F5F0] text-[#0D5D48] font-medium"
@@ -185,7 +171,7 @@ export default function Services() {
             {/* Top Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <p className="text-sm text-gray-500">
-                نتائج البحث: <span className="font-semibold text-[#1A1A2E]">{filteredServices.length}</span> خدمة
+                نتائج البحث: <span className="font-semibold text-[#1A1A2E]">{servicesData?.total ?? 0}</span> خدمة
               </p>
 
               <div className="flex items-center gap-3">
@@ -272,12 +258,18 @@ export default function Services() {
             )}
 
             {/* Grid/List */}
-            {filteredServices.length > 0 ? (
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="h-72 bg-white rounded-2xl animate-pulse" />
+                ))}
+              </div>
+            ) : filteredServices.length > 0 ? (
               <div className={viewMode === "grid"
                 ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
                 : "space-y-4"
               }>
-                {filteredServices.map((service, i) => (
+                {filteredServices.map((service: any, i) => (
                   <div
                     key={service.id}
                     className="animate-fade-in-up"
@@ -342,7 +334,7 @@ export default function Services() {
                 {categories.map((cat) => (
                   <button
                     key={cat.id}
-                    onClick={() => setSelectedCategory(selectedCategory === cat.slug ? "" : cat.slug)}
+                    onClick={() => setSelectedCategory(selectedCategory === cat.slug ? "" : cat.slug ?? "")}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                       selectedCategory === cat.slug
                         ? "bg-[#E8F5F0] text-[#0D5D48] font-medium"

@@ -1,17 +1,108 @@
 import { getDb } from "../api/queries/connection";
-// TODO: import tables from "./schema"
+import * as schema from "./schema";
 
 async function seed() {
   const db = getDb();
-  console.log("Seeding database...");
+  console.log("🚀 Seeding database...");
 
-  // TODO: insert seed data, e.g.
-  // await db.insert(schema.posts).values([
-  //   { title: "First post", content: "Hello world" },
-  // ]);
+  // 1. Clear existing data (optional but helpful for fresh start)
+  // Warning: This deletes existing data. Use with caution.
+  // await db.delete(schema.categories);
+  
+  // 2. Insert Categories
+  const categories = [
+    { nameAr: "تصميم غرافيك", slug: "graphic-design", icon: "Palette", sortOrder: 1 },
+    { nameAr: "برمجة وتطوير", slug: "programming", icon: "Code", sortOrder: 2 },
+    { nameAr: "كتابة وترجمة", slug: "writing-translation", icon: "Languages", sortOrder: 3 },
+    { nameAr: "تسويق رقمي", slug: "digital-marketing", icon: "Megaphone", sortOrder: 4 },
+    { nameAr: "فيديو وأنميشن", slug: "video-animation", icon: "Video", sortOrder: 5 },
+    { nameAr: "هندسة وعمارة", slug: "architecture", icon: "Home", sortOrder: 6 },
+    { nameAr: "استشارات أعمال", slug: "business-consulting", icon: "Briefcase", sortOrder: 7 },
+    { nameAr: "صوتيات وموسيقى", slug: "audio-music", icon: "Music", sortOrder: 8 },
+  ];
 
-  console.log("Done.");
-  process.exit(0); // close MySQL connection pool
+  console.log("📦 Inserting categories...");
+  await db.insert(schema.categories).values(categories).onDuplicateKeyUpdate({
+    set: { nameAr: schema.sql`values(name_ar)`, icon: schema.sql`values(icon)`, sort_order: schema.sql`values(sort_order)` }
+  });
+
+  // 3. Create a Demo Seller User if not exists
+  console.log("👤 Creating demo users...");
+  const demoUsers = [
+    { name: "أحمد المحمد", email: "ahmad@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmad" },
+    { name: "سارة العلي", email: "sara@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sara" },
+  ];
+
+  for (const u of demoUsers) {
+    await db.insert(schema.users).values(u).onDuplicateKeyUpdate({ set: { name: u.name } });
+  }
+
+  // Get inserted users and categories
+  const allUsers = await db.select().from(schema.users);
+  const allCats = await db.select().from(schema.categories);
+
+  // 4. Create Seller Profiles
+  console.log("📋 Creating seller profiles...");
+  for (const user of allUsers) {
+    if (user.role === "seller") {
+      await db.insert(schema.sellerProfiles).values({
+        userId: user.id,
+        bio: "مطور ومصمم بخبرة تزيد عن 5 سنوات في العمل الحر.",
+        level: "seller_level_2",
+        rating: "4.9",
+        totalOrders: 15,
+        completedOrders: 14,
+      }).onDuplicateKeyUpdate({ set: { bio: "مطور ومصمم بخبرة تزيد عن 5 سنوات في العمل الحر." } });
+    }
+  }
+
+  // 5. Create Sample Services
+  console.log("🛠️ Creating sample services...");
+  const sampleServices = [
+    {
+      sellerId: allUsers[0].id,
+      categoryId: allCats.find(c => c.slug === "graphic-design")?.id || 1,
+      title: "تصميم شعار احترافي لشركتك خلال 48 ساعة",
+      slug: "professional-logo-design-demo",
+      description: "سأقوم بتصميم شعار فريد يعبر عن هوية شركتك بجودة عالية وصيغ متعددة.",
+      price: "50000",
+      deliveryTime: 2,
+      status: "active" as const,
+      featured: true,
+      images: ["https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&q=80&w=800"],
+    },
+    {
+      sellerId: allUsers[1].id,
+      categoryId: allCats.find(c => c.slug === "programming")?.id || 1,
+      title: "إنشاء متجر إلكتروني متكامل باستخدام React و Tailwind",
+      slug: "react-ecommerce-store-demo",
+      description: "بناء متجر سريع الاستجابة مع لوحة تحكم وسلة مشتريات وتصميم عصري.",
+      price: "250000",
+      deliveryTime: 7,
+      status: "active" as const,
+      featured: true,
+      images: ["https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=800"],
+    },
+  ];
+
+  for (const s of sampleServices) {
+    await db.insert(schema.services).values(s).onDuplicateKeyUpdate({ set: { title: s.title, description: s.description } });
+  }
+
+  // 6. Ensure Wallets
+  console.log("💰 Ensuring wallets...");
+  for (const user of allUsers) {
+    await db.insert(schema.wallets).values({
+      userId: user.id,
+      balance: user.role === "seller" ? "150000" : "50000",
+    }).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  }
+
+  console.log("✅ Seeding completed successfully!");
+  process.exit(0);
 }
 
-seed();
+seed().catch(err => {
+  console.error("❌ Seeding failed:", err);
+  process.exit(1);
+});
