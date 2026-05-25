@@ -1,9 +1,10 @@
 import { eq, and, desc, or } from "drizzle-orm";
 import { getDb } from "./connection";
-import * as schema from "@db/schema";
+import * as schema from "../../db/schema";
 
 export async function listConversations(userId: number) {
-  return getDb()
+  const db = getDb();
+  return db
     .select({
       id: schema.conversations.id,
       orderId: schema.conversations.orderId,
@@ -18,21 +19,14 @@ export async function listConversations(userId: number) {
     .from(schema.conversations)
     .innerJoin(
       schema.users,
-      // Join to the OTHER participant
-      and(
-        or(
+      or(
+        and(
           eq(schema.conversations.buyerId, userId),
-          eq(schema.conversations.sellerId, userId),
+          eq(schema.users.id, schema.conversations.sellerId),
         ),
-        or(
-          and(
-            eq(schema.conversations.buyerId, userId),
-            eq(schema.users.id, schema.conversations.sellerId),
-          ),
-          and(
-            eq(schema.conversations.sellerId, userId),
-            eq(schema.users.id, schema.conversations.buyerId),
-          ),
+        and(
+          eq(schema.conversations.sellerId, userId),
+          eq(schema.users.id, schema.conversations.buyerId),
         ),
       ),
     )
@@ -45,17 +39,11 @@ export async function listConversations(userId: number) {
     .orderBy(desc(schema.conversations.lastMessageAt));
 }
 
-export async function findConversation(id: number) {
-  const rows = await getDb()
-    .select()
-    .from(schema.conversations)
-    .where(eq(schema.conversations.id, id))
-    .limit(1);
-  return rows.at(0);
-}
+export async function findOrCreateConversation(participantA: number, participantB: number) {
+  const db = getDb();
+  const [buyerId, sellerId] = participantA < participantB ? [participantA, participantB] : [participantB, participantA];
 
-export async function findOrCreateConversation(buyerId: number, sellerId: number, orderId?: number) {
-  const existing = await getDb()
+  const existing = await db
     .select()
     .from(schema.conversations)
     .where(
@@ -68,23 +56,18 @@ export async function findOrCreateConversation(buyerId: number, sellerId: number
 
   if (existing.length > 0) return existing[0];
 
-  await getDb().insert(schema.conversations).values({
+  const [result] = await db.insert(schema.conversations).values({
     buyerId,
     sellerId,
-    orderId,
   });
-
-  const created = await getDb()
+  
+  const created = await db
     .select()
     .from(schema.conversations)
-    .where(
-      and(
-        eq(schema.conversations.buyerId, buyerId),
-        eq(schema.conversations.sellerId, sellerId),
-      ),
-    )
+    .where(eq(schema.conversations.id, result.insertId))
     .limit(1);
-  return created.at(0)!;
+    
+  return created[0];
 }
 
 export async function listMessages(conversationId: number, limit = 50) {
@@ -105,29 +88,18 @@ export async function listMessages(conversationId: number, limit = 50) {
     .limit(limit);
 }
 
-export async function sendMessage(data: {
+export async function createMessage(data: {
   conversationId: number;
   senderId: number;
   content: string;
 }) {
-  await getDb().insert(schema.messages).values(data);
-  await getDb()
+  const db = getDb();
+  await db.insert(schema.messages).values(data);
+  await db
     .update(schema.conversations)
     .set({
       lastMessage: data.content.substring(0, 100),
       lastMessageAt: new Date(),
     })
     .where(eq(schema.conversations.id, data.conversationId));
-}
-
-export async function markMessagesRead(conversationId: number, userId: number) {
-  await getDb()
-    .update(schema.messages)
-    .set({ isRead: true })
-    .where(
-      and(
-        eq(schema.messages.conversationId, conversationId),
-        eq(schema.messages.isRead, false),
-      ),
-    );
 }

@@ -1,6 +1,6 @@
 import { desc, count, sql, eq } from "drizzle-orm";
 import { getDb } from "./connection";
-import * as schema from "@db/schema";
+import * as schema from "../../db/schema"; // Corrected import path
 
 export async function getAdminStats() {
   const db = getDb();
@@ -22,7 +22,7 @@ export async function getAdminStats() {
 
   const completionRate =
     completionRow?.total > 0
-      ? Math.round(((completionRow?.completed ?? 0) / completionRow.total) * 100)
+      ? Math.round(((completionRow?.completed ?? 0) / (completionRow.total ?? 1)) * 100)
       : 0;
 
   const [walletRow] = await db
@@ -41,7 +41,7 @@ export async function getAdminStats() {
   };
 }
 
-export async function adminListUsers(limit = 50) {
+export async function listUsers(limit = 50) {
   return getDb()
     .select({
       id: schema.users.id,
@@ -58,7 +58,7 @@ export async function adminListUsers(limit = 50) {
     .limit(limit);
 }
 
-export async function adminListPendingServices() {
+export async function listPendingServices() {
   return getDb()
     .select({
       id: schema.services.id,
@@ -76,22 +76,49 @@ export async function adminListPendingServices() {
     .orderBy(desc(schema.services.createdAt));
 }
 
-export async function adminUpdateUserStatus(
-  id: number,
-  status: typeof schema.users.$inferInsert.status,
-) {
+export async function approveService(id: number) {
   await getDb()
-    .update(schema.users)
-    .set({ status })
-    .where(eq(schema.users.id, id));
+    .update(schema.services)
+    .set({ status: "active" })
+    .where(eq(schema.services.id, id));
 }
 
-export async function adminUpdateUserRole(
-  id: number,
-  role: typeof schema.users.$inferInsert.role,
-) {
+export async function rejectService(id: number) {
   await getDb()
-    .update(schema.users)
-    .set({ role })
-    .where(eq(schema.users.id, id));
+    .update(schema.services)
+    .set({ status: "rejected" })
+    .where(eq(schema.services.id, id));
+}
+
+export async function listAllOrders(limit = 50) {
+  return getDb()
+    .select({
+      id: schema.orders.id,
+      orderNumber: schema.orders.orderNumber,
+      totalAmount: schema.orders.totalAmount,
+      status: schema.orders.status,
+      createdAt: schema.orders.createdAt,
+      serviceTitle: schema.services.title,
+      buyerName: schema.users.name,
+    })
+    .from(schema.orders)
+    .innerJoin(schema.services, eq(schema.services.id, schema.orders.serviceId))
+    .innerJoin(schema.users, eq(schema.users.id, schema.orders.buyerId))
+    .orderBy(desc(schema.orders.createdAt))
+    .limit(limit);
+}
+
+export async function listWithdrawalRequests() {
+  return getDb()
+    .select({
+      id: schema.withdrawalRequests.id,
+      userId: schema.withdrawalRequests.userId,
+      amount: schema.withdrawalRequests.amount,
+      status: schema.withdrawalRequests.status,
+      createdAt: schema.withdrawalRequests.createdAt,
+      userName: schema.users.name,
+    })
+    .from(schema.withdrawalRequests)
+    .innerJoin(schema.users, eq(schema.users.id, schema.withdrawalRequests.userId))
+    .orderBy(desc(schema.withdrawalRequests.createdAt));
 }

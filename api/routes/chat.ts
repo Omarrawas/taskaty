@@ -3,7 +3,8 @@ import { createRouter, authedQuery } from "../middleware";
 import {
   listConversations,
   listMessages,
-  sendMessage,
+  findOrCreateConversation,
+  createMessage,
 } from "../queries/chat";
 
 export const chatRouter = createRouter({
@@ -12,9 +13,9 @@ export const chatRouter = createRouter({
   }),
 
   messages: authedQuery
-    .input(z.object({ otherId: z.number().int() }))
-    .query(async ({ input, ctx }) => {
-      return listMessages(ctx.user.id, input.otherId);
+    .input(z.object({ conversationId: z.number().int() }))
+    .query(async ({ input }) => {
+      return listMessages(input.conversationId);
     }),
 
   send: authedQuery
@@ -25,10 +26,12 @@ export const chatRouter = createRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return sendMessage({
+      const conv = await findOrCreateConversation(ctx.user.id, input.receiverId);
+      await createMessage({
+        conversationId: conv.id,
         senderId: ctx.user.id,
-        receiverId: input.receiverId,
         content: input.content,
       });
+      return { success: true, conversationId: conv.id };
     }),
 });
