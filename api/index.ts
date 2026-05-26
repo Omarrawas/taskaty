@@ -1,30 +1,38 @@
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
+import { env } from "./lib/env";
 
-export default async function handler(req: Request) {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      },
-    });
-  }
+const app = new Hono();
 
-  try {
-    return fetchRequestHandler({
+app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+
+try {
+  app.use("/api/trpc/*", async (c) => {
+    const res = await fetchRequestHandler({
       endpoint: "/api/trpc",
-      req,
+      req: c.req.raw,
       router: appRouter,
       createContext,
     });
-  } catch (error) {
-    console.error("API handler error:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+    return res;
+  });
+  app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+} catch (e) {
+  console.error("Failed to initialize API routes:", e);
 }
+
+export default app;
+
+if (env.isProduction && !process.env.VERCEL) {
+  const { serve } = await import("@hono/node-server");
+  const { serveStaticFiles } = await import("./lib/vite");
+  serveStaticFiles(app);
+  const port = parseInt(process.env.PORT || "3000");
+  serve({ fetch: app.fetch, port }, () => {
+    console.log(`Server running on http://localhost:${port}/`);
+  });
+}
+
