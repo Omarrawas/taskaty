@@ -26,6 +26,16 @@ export function useAuth(options?: UseAuthOptions) {
     retry: false,
   });
 
+  useEffect(() => {
+    if (error) {
+      console.error("[useAuth] auth.me query failed:", error);
+    }
+  }, [error]);
+
+  if (error) {
+    console.error("[useAuth] auth.me failed:", error);
+  }
+
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: async () => {
       await utils.invalidate();
