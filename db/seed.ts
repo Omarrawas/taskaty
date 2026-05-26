@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { getDb } from "../api/queries/connection";
 import * as schema from "./schema";
 
@@ -5,10 +6,6 @@ async function seed() {
   const db = getDb();
   console.log("🚀 Seeding database...");
 
-  // 1. Clear existing data (optional but helpful for fresh start)
-  // Warning: This deletes existing data. Use with caution.
-  // await db.delete(schema.categories);
-  
   // 2. Insert Categories
   const categories = [
     { nameAr: "تصميم غرافيك", slug: "graphic-design", icon: "Palette", sortOrder: 1 },
@@ -23,14 +20,18 @@ async function seed() {
 
   console.log("📦 Inserting categories...");
   await db.insert(schema.categories).values(categories).onDuplicateKeyUpdate({
-    set: { nameAr: schema.sql`values(name_ar)`, icon: schema.sql`values(icon)`, sort_order: schema.sql`values(sort_order)` }
+    set: { 
+      nameAr: sql`VALUES(name_ar)`, 
+      icon: sql`VALUES(icon)`, 
+      sortOrder: sql`VALUES(sort_order)` 
+    }
   });
 
   // 3. Create a Demo Seller User if not exists
   console.log("👤 Creating demo users...");
   const demoUsers = [
-    { name: "أحمد المحمد", email: "ahmad@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmad" },
-    { name: "سارة العلي", email: "sara@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sara" },
+    { unionId: "demo_user_1", name: "أحمد المحمد", email: "ahmad@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmad" },
+    { unionId: "demo_user_2", name: "سارة العلي", email: "sara@demo.com", role: "seller" as const, status: "active" as const, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sara" },
   ];
 
   for (const u of demoUsers) {
@@ -48,7 +49,7 @@ async function seed() {
       await db.insert(schema.sellerProfiles).values({
         userId: user.id,
         bio: "مطور ومصمم بخبرة تزيد عن 5 سنوات في العمل الحر.",
-        level: "seller_level_2",
+        level: "level2",
         rating: "4.9",
         totalOrders: 15,
         completedOrders: 14,
@@ -92,10 +93,11 @@ async function seed() {
   // 6. Ensure Wallets
   console.log("💰 Ensuring wallets...");
   for (const user of allUsers) {
+    const balance = user.role === "seller" ? "150000" : "50000";
     await db.insert(schema.wallets).values({
       userId: user.id,
-      balance: user.role === "seller" ? "150000" : "50000",
-    }).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+      balance: balance,
+    }).onDuplicateKeyUpdate({ set: { balance: balance } });
   }
 
   console.log("✅ Seeding completed successfully!");

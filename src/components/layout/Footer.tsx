@@ -32,7 +32,7 @@ export default function Footer() {
                 className="text-white text-2xl font-medium"
                 style={{ fontFamily: "'Reem Kufi', 'Cairo', sans-serif" }}
               >
-                خدماتي
+                Taskaty
               </span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed">
@@ -85,7 +85,7 @@ export default function Footer() {
             <ul className="space-y-3 text-gray-400 text-sm">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-[#C49A2C]" />
-                support@khadamati.sy
+                support@taskaty.sy
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-[#C49A2C]" />
@@ -113,7 +113,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-white/10 mt-12 pt-6 text-center">
           <p className="text-gray-500 text-sm">
-            &copy; 2025 خدماتي. جميع الحقوق محفوظة.
+            &copy; 2025 Taskaty. جميع الحقوق محفوظة.
           </p>
         </div>
       </div>

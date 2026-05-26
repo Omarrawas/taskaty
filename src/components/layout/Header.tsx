@@ -45,7 +45,7 @@ export default function Header() {
               className="text-[#0D5D48] text-2xl font-medium"
               style={{ fontFamily: "'Reem Kufi', 'Cairo', sans-serif" }}
             >
-              خدماتي
+              Taskaty
             </span>
           </Link>
 

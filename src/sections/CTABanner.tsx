@@ -8,7 +8,7 @@ export default function CTABanner() {
       style={{ background: "linear-gradient(135deg, #0D5D48 0%, #094533 100%)" }}
     >
       <div className="max-w-[1200px] mx-auto px-4 text-center">
-        <h2 className="text-white text-3xl font-bold mb-3">ابدأ الآن وانضم لمجتمع خدماتي</h2>
+        <h2 className="text-white text-3xl font-bold mb-3">ابدأ الآن وانضم لمجتمع Taskaty</h2>
         <p className="text-white/80 text-base mb-8 max-w-xl mx-auto">
           سواء كنت تبحث عن خدمة أو تريد عرض خدماتك — نحن هنا لنساعدك
         </p>
