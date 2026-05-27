@@ -1,4 +1,4 @@
-import { z } from "zod/v4";
+import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "../middleware";
 import { listReviewsByService, listReviewsBySeller, createReview } from "../queries/reviews";
 import { findOrderById } from "../queries/orders";

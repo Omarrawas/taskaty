@@ -1,6 +1,6 @@
 import { createRouter, publicQuery } from "../middleware";
 import { listCategories, findCategoryBySlug } from "../queries/categories";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const categoriesRouter = createRouter({
   list: publicQuery.query(async () => {
