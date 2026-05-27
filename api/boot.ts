@@ -14,14 +14,22 @@ app.onError((err, c) => {
   return c.json({ error: err.message || "Internal Server Error", stack: env.isProduction ? undefined : err.stack }, 500);
 });
 
+app.get("/api/debug", (c) => c.json({ ok: true, env: { hasDb: !!env.databaseUrl, hasFirebase: !!env.firebase.projectId } }));
+
 app.all("/api/trpc/*", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
+  try {
+    return await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext,
+    });
+  } catch (err: any) {
+    console.error("[tRPC Handler Error]", err);
+    return c.json({ error: err.message || "tRPC Handler Error" }, 500);
+  }
 });
+
 
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
