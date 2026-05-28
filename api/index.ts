@@ -1,3 +1,6 @@
+if (!process.env.VERCEL) {
+  try { await import("dotenv/config"); } catch (e) {}
+}
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -31,8 +34,33 @@ app.onError((err, c) => {
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
-// Simple health check first
+// Simple health & diagnostic checks
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
+
+app.get("/api/diagnose", async (c) => {
+  const report: any = {
+    env: {
+      hasDb: !!process.env.DATABASE_URL,
+      hasFbProject: !!process.env.FIREBASE_PROJECT_ID,
+      nodeEnv: process.env.NODE_ENV,
+      vercel: !!process.env.VERCEL,
+    },
+    checks: {}
+  };
+
+  try {
+    const { getDb } = await import("./queries/connection");
+    const result = await Promise.race([
+      getDb().execute("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("DB Timeout")), 3000))
+    ]);
+    report.checks.db = "CONNECTED";
+  } catch (e: any) {
+    report.checks.db = "FAILED: " + e.message;
+  }
+
+  return c.json(report);
+});
 
 try {
   app.all("/api/trpc/*", async (c) => {

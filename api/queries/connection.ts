@@ -25,7 +25,8 @@ export function getDb() {
       // Ensure the connection doesn't time out too quickly
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      connectTimeout: 5000, // 5 seconds timeout for connection
     });
     
     instance = drizzle(poolConnection, {

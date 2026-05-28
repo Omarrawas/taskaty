@@ -1,4 +1,4 @@
-import "dotenv/config";
+// Env vars are loaded globally in index.ts or by Vercel
 
 export const env = {
   isProduction: process.env.NODE_ENV === "production",
