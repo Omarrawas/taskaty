@@ -1,95 +1,59 @@
-if (!process.env.VERCEL) {
-  try { await import("dotenv/config"); } catch (e) {}
-}
 import { Hono } from "hono";
+import { handle } from "hono/vercel";
 import { bodyLimit } from "hono/body-limit";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
-import { env } from "./lib/env";
-import type { HttpBindings } from "@hono/node-server";
-import { handle } from "hono/vercel";
 
-console.log("[v2] Booting API...");
-console.log("[v2] DB_URL Status:", !!process.env.DATABASE_URL ? "DETECTED" : "NULL");
+// We define the app
+const app = new Hono().basePath("/api");
 
-const app = new Hono<{ Bindings: HttpBindings }>();
-
+// COOP and Debug headers
 app.use("*", async (c, next) => {
-  console.log(`[v2] Request: ${c.req.method} ${c.req.url}`);
   c.res.headers.set("Cross-Origin-Opener-Policy", "unsafe-none");
-  c.res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   await next();
 });
 
+// Error handling
 app.onError((err, c) => {
-  console.error("[CRITICAL HONO ERROR]", err);
+  console.error("[CRITICAL HONO]", err);
   return c.json({ 
     error: "Server Error", 
     message: err.message,
-    ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {})
+    details: err.stack
   }, 500);
 });
 
-
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
-// Simple health & diagnostic checks
-app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
+// Health
+app.get("/health", (c) => c.json({ status: "ok", time: new Date().toISOString(), ver: "v3" }));
 
-app.get("/api/diagnose", async (c) => {
-  const report: any = {
-    env: {
-      hasDb: !!process.env.DATABASE_URL,
-      hasFbProject: !!process.env.FIREBASE_PROJECT_ID,
-      nodeEnv: process.env.NODE_ENV,
-      vercel: !!process.env.VERCEL,
-    },
-    checks: {}
-  };
-
+// Diagnose
+app.get("/diagnose", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
-    const result = await Promise.race([
-      getDb().execute("SELECT 1"),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("DB Timeout")), 3000))
-    ]);
-    report.checks.db = "CONNECTED";
+    await getDb().execute("SELECT 1");
+    return c.json({ db: "CONNECTED", env: !!process.env.DATABASE_URL });
   } catch (e: any) {
-    report.checks.db = "FAILED: " + e.message;
+    return c.json({ db: "FAILED", error: e.message, env: !!process.env.DATABASE_URL }, 500);
   }
-
-  return c.json(report);
 });
 
-try {
-  app.all("/api/trpc/*", async (c) => {
-    try {
-      return await fetchRequestHandler({
-        endpoint: "/api/trpc",
-        req: c.req.raw,
-        router: appRouter,
-        createContext: (opts) => createContext({ ...opts }),
-        onError: ({ error, path }) => {
-          console.error(`[tRPC Error] path: ${path}`, error);
-        },
-      });
-    } catch (e: any) {
-      console.error("[tRPC Fetch Handler Crash]", e);
-      return c.json({ 
-        error: "Internal Protocol Error", 
-        message: e.message,
-        details: typeof e === 'object' ? JSON.stringify(e) : String(e)
-      }, 500);
-    }
+// tRPC
+app.all("/trpc/*", async (c) => {
+  return fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req: c.req.raw,
+    router: appRouter,
+    createContext: (opts) => createContext(opts),
+    onError: ({ error, path }) => {
+      console.error(`[tRPC Error] ${path}:`, error);
+    },
   });
+});
 
-  app.all("/api/*", (c) => c.json({ error: "Route Not Found" }, 404));
-} catch (e) {
-  console.error("Failed to initialize API routes:", e);
-}
-
-
+// Vercel Entry Point
 export const GET = handle(app);
 export const POST = handle(app);
 export const PUT = handle(app);
@@ -98,15 +62,3 @@ export const PATCH = handle(app);
 export const OPTIONS = handle(app);
 
 export default handle(app);
-
-if (env.isProduction && !process.env.VERCEL) {
-  const { serve } = await import("@hono/node-server");
-  const { serveStaticFiles } = await import("./lib/vite");
-  serveStaticFiles(app);
-  const port = parseInt(process.env.PORT || "3000");
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
-}
-
-

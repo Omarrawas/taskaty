@@ -1,14 +1,16 @@
 {
   "version": 2,
-  "builds": [
+  "public": true,
+  "framework": "vite",
+  "outputDirectory": "build/public",
+  "rewrites": [
     {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
     },
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "build/public" }
+      "source": "/(.*)",
+      "destination": "/$1"
     }
   ],
   "headers": [
@@ -20,16 +22,6 @@
           "value": "unsafe-none"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "api/index.ts"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/$1"
     }
   ]
 }
