@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { auth } from "@/lib/firebase";
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
@@ -28,6 +29,28 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Handle redirect result on mount
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          setLoading(true);
+          await utils.invalidate();
+          const me = await utils.client.auth.me.query();
+          if (me) {
+            navigate("/");
+          }
+        }
+      } catch (error: any) {
+        console.error("Redirect check failed:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkRedirect();
+  }, [auth, utils, navigate]);
+
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
     navigate(newMode === "register" ? "/register" : "/login", { replace: true });
@@ -37,8 +60,9 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       setLoading(true);
-      await signInWithPopup(auth, provider);
-      await utils.invalidate();
+      await signInWithRedirect(auth, provider);
+      // The browser will redirect, no need for logic after this line
+    } catch (error: any) {
       // تحقق من أن API التعرف على الحالة يعمل
       try {
         const result = await utils.client.auth.me.query();
