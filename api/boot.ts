@@ -10,7 +10,8 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use("*", async (c, next) => {
   console.log(`[v2] Request: ${c.req.method} ${c.req.url}`);
-  c.res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  c.res.headers.set("Cross-Origin-Opener-Policy", "unsafe-none");
+  c.res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   await next();
 });
 

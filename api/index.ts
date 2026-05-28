@@ -14,8 +14,8 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use("*", async (c, next) => {
   console.log(`[v2] Request: ${c.req.method} ${c.req.url}`);
-  // Add COOP header to response as well, just in case
-  c.res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  c.res.headers.set("Cross-Origin-Opener-Policy", "unsafe-none");
+  c.res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   await next();
 });
 

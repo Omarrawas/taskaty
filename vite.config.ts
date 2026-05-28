@@ -12,6 +12,10 @@ export default defineConfig({
     inspectAttr(), react()],
   server: {
     port: 3000,
+    headers: {
+      "Cross-Origin-Opener-Policy": "unsafe-none",
+      "Cross-Origin-Embedder-Policy": "unsafe-none",
+    },
   },
   resolve: {
     alias: {
