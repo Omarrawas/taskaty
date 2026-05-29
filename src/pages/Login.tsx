@@ -126,8 +126,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm border-2">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <Card className="w-full max-w-sm border-2 shadow-xl">
         <CardHeader className="text-center space-y-1">
           <CardTitle className="text-2xl font-bold">
             {mode === "login" ? "مرحباً بعودتك" : "إنشاء حساب جديد"}
