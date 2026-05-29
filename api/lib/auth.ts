@@ -1,116 +1,56 @@
-import { auth } from "./firebase-admin";
-import { findUserByUnionId } from "../queries/users";
-import { Errors } from "../../contracts/errors";
+import { getAuth } from "firebase-admin/auth";
+import { auth as adminAuth } from "./firebase-admin";
+import { findUserByUnionId, upsertUser } from "../queries/users";
 
-async function verifyTokenWithRestApi(idToken: string) {
-  const apiKey =
-    process.env.VITE_FIREBASE_API_KEY ||
-    "AIzaSyDJMfencP299e89zPg31MaVKdQS489cgzM";
-
-  const res = await fetch(
-    `https://www.googleapis.com/identitytoolkit/v3/relyingparty/getAccountInfo?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(`Token verification failed: ${res.status}`);
-  }
-
-  const data = (await res.json()) as any;
-  const account = data.users?.[0];
-
-  if (!account) {
-    throw new Error("No account found for token");
-  }
-
-  return {
-    uid: account.localId,
-    displayName: account.displayName,
-    email: account.email,
-    photoURL: account.photoUrl,
-  };
+export interface AuthedUser {
+  unionId: string;
+  name?: string;
+  email?: string;
+  avatar?: string;
+  role: "buyer" | "seller" | "admin" | "moderator";
 }
 
-export async function authenticateRequest(headers: Headers) {
-  const authHeader = headers.get("authorization");
-  console.log("[Auth] Authorization header present:", !!authHeader);
-  
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.warn("[Auth] Missing or invalid authorization header format.");
-    throw Errors.forbidden("Missing or invalid authorization header");
+export async function authenticateRequest(req: Request): Promise<AuthedUser | null> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
   }
 
   const idToken = authHeader.split("Bearer ")[1];
-  console.log("[Auth] Token length:", idToken?.length);
-
-
+  
   try {
-    let uid: string;
-    let displayName: string | undefined;
-    let email: string | undefined;
-    let photoURL: string | undefined;
-
-    try {
-      if (auth) {
-        const decodedToken = await auth.verifyIdToken(idToken);
-        uid = decodedToken.uid;
-        const fbUser = await auth.getUser(uid);
-        displayName = fbUser.displayName ?? undefined;
-        email = fbUser.email ?? undefined;
-        photoURL = fbUser.photoURL ?? undefined;
-      } else {
-        const result = await verifyTokenWithRestApi(idToken);
-        uid = result.uid;
-        displayName = result.displayName;
-        email = result.email;
-        photoURL = result.photoURL;
-      }
-    } catch (fbErr: any) {
-      console.error("[Auth] Firebase verification failed:", fbErr.message);
-      throw Errors.forbidden(`فشل التحقق من الحساب في Firebase: ${fbErr.message}`);
+    if (!adminAuth) {
+      console.error("[Auth] Firebase Admin not initialized");
+      return null;
     }
 
-    let user;
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    
+    // We have a valid Firebase user. Now try to get/sync they in our DB.
+    let user: any = null;
     try {
-      user = await findUserByUnionId(uid);
-      if (!user) {
-        console.log("[Auth] User not found in DB, creating new user for UID:", uid);
-        const { upsertUser } = await import("../queries/users");
-        user = await upsertUser({
-          unionId: uid,
-          name: displayName || "Anonymous",
-          email: email,
-          avatar: photoURL,
-          lastSignInAt: new Date(),
-        });
-      }
-    } catch (dbErr: any) {
-      console.error("[Auth] CRITICAL DB ERROR - BYPASSING FOR DIAGNOSITCS:", dbErr.message);
-      // FAILS-SAFE: Return a mock user so the app doesn't crash
+      console.log("[Auth] Attempting to find/upsert user in DB:", decodedToken.uid);
+      user = await upsertUser({
+        unionId: decodedToken.uid,
+        email: decodedToken.email,
+        name: decodedToken.name || decodedToken.email?.split("@")[0] || "User",
+        avatar: decodedToken.picture,
+        lastSignInAt: new Date(),
+      });
+    } catch (dbError: any) {
+      console.error("[Auth] Database failure, but continuing with Firebase identity:", dbError.message);
+      // FAIL-SAFE: If DB crashes, we still allow the request but with limited info
       return {
-        unionId: uid,
-        name: displayName || "Guest User",
-        email: email,
-        avatar: photoURL,
-        role: "user",
-        createdAt: new Date(),
+        unionId: decodedToken.uid,
+        email: decodedToken.email,
+        name: decodedToken.name || "User (Guest Mode)",
+        role: "buyer", // Default for guest
       };
     }
-    
-    if (!user) {
-      // Fallback for logic errors
-      return { unionId: uid, name: displayName || "Guest", role: "user" };
-    }
-    
-    return user;
 
+    return user;
   } catch (error: any) {
-    console.error("[Auth] Overall auth failure:", error);
-    if (error.code) throw error; // Re-throw specialized errors
-    throw Errors.forbidden(error.message || "فشل غير معروف في المصادقة.");
+    console.error("[Auth] Token verification failed:", error.message);
+    return null;
   }
 }
