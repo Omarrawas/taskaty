@@ -130,7 +130,7 @@ export default function Login() {
       <Card className="w-full max-w-sm border-2 shadow-xl">
         <CardHeader className="text-center space-y-1">
           <CardTitle className="text-2xl font-bold">
-            {mode === "login" ? "مرحباً بعودتك" : "إنشاء حساب جديد"}
+            {mode === "login" ? "دخول المستخدمين" : "إنشاء حساب جديد"}
           </CardTitle>
           <CardDescription className="text-sm">
             {mode === "login" ? "سجل دخولك للمتابعة" : "أنشئ حسابك للبدء"}
