@@ -39,32 +39,21 @@ export default function Login() {
       console.error("error processing redirect result", err);
     });
 
-    // 2. Listen for user state (works for both redirect return and session restore)
+    // 2. Listen for user state
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         console.log("Auth State Changed: User detected!", user.email);
         setLoading(true);
-        toast.loading("جاري مزامنة بياناتك...");
+        toast.success("مرحباً بك!");
         
-        try {
-          await utils.invalidate();
-          const me = await utils.client.auth.me.query();
-          if (me) {
-            toast.success(`مرحباً ${me.name || "بك"}`);
-            navigate("/");
-          }
-        } catch (err: any) {
-          console.error("Sync failed:", err);
-          toast.error("فشل مزامنة البيانات مع الخادم");
-        } finally {
-          setLoading(false);
-          toast.dismiss();
-        }
+        // Navigate immediately to home, the home page will handle its own data fetching
+        navigate("/");
+        setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [auth, utils, navigate]);
+  }, [auth, navigate]);
 
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
