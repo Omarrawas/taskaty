@@ -8,8 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { auth } from "@/lib/firebase";
 import {
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -30,22 +29,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Handle auth state changes and redirect results
+  // Handle auth state changes
   useEffect(() => {
     console.log("Login page mounted, listening for auth state...");
 
-    // 1. Process result if coming back from redirect
-    getRedirectResult(auth).then((result) => {
-      if (result?.user) {
-        console.log("[Login] Redirect result success! User:", result.user.email);
-      } else {
-        console.log("[Login] No redirect result found (standard mount)");
-      }
-    }).catch(err => {
-      console.error("[Login] Redirect Error:", err.code, err.message);
-    });
-
-    // 2. Listen for user state
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         console.log("[Login] onAuthStateChanged: User detected!", user.email);
@@ -70,9 +57,13 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       setLoading(true);
-      await signInWithRedirect(auth, provider);
+      console.log("[Login] Starting Google Sign-In (Popup)...");
+      const result = await signInWithPopup(auth, provider);
+      console.log("[Login] Popup success! User:", result.user.email);
+      toast.success("مرحباً بك!");
+      navigate("/");
     } catch (error: any) {
-      console.error("[Login] Google Sign-In Error:", error);
+      console.error("[Login] Google Sign-In Error:", error.code, error.message);
       toast.error(error?.message || "فشل تسجيل الدخول");
     } finally {
       setLoading(false);
