@@ -35,14 +35,20 @@ export default function Login() {
     console.log("Login page mounted, listening for auth state...");
 
     // 1. Process result if coming back from redirect
-    getRedirectResult(auth).catch(err => {
-      console.error("error processing redirect result", err);
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        console.log("[Login] Redirect result success! User:", result.user.email);
+      } else {
+        console.log("[Login] No redirect result found (standard mount)");
+      }
+    }).catch(err => {
+      console.error("[Login] Redirect Error:", err.code, err.message);
     });
 
     // 2. Listen for user state
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("Auth State Changed: User detected!", user.email);
+        console.log("[Login] onAuthStateChanged: User detected!", user.email);
         setLoading(true);
         toast.success("مرحباً بك!");
         

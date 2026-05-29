@@ -20,7 +20,9 @@ export function useAuth(options?: UseAuthOptions) {
   const [firebaseLoaded, setFirebaseLoaded] = useState(false);
 
   useEffect(() => {
+    console.log("[useAuth] Initializing onAuthStateChanged listener...");
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("[useAuth] onAuthStateChanged fired. User:", user?.email || "null");
       setFirebaseUser(user);
       setFirebaseLoaded(true);
     });
