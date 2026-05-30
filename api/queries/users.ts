@@ -13,18 +13,21 @@ export async function findUserByUnionId(unionId: string) {
   return rows.at(0);
 }
 
-export async function upsertUser(data: InsertUser) {
+export async function upsertUser(data: InsertUser, forceAdmin = false) {
   const values = { ...data };
+  
+  // On update (re-login): update profile info but NEVER overwrite the existing role
+  // This prevents sellers from being demoted to buyers on re-login
   const updateSet: Partial<InsertUser> = {
     lastSignInAt: new Date(),
-    ...data,
+    name: data.name,
+    email: data.email,
+    avatar: data.avatar,
+    // role is intentionally excluded from updateSet
   };
 
-  if (
-    values.role === undefined &&
-    values.unionId &&
-    values.unionId === env.ownerUnionId
-  ) {
+  // Force admin role for owner on both insert and update
+  if (forceAdmin || (values.unionId && values.unionId === env.ownerUnionId)) {
     values.role = "admin";
     updateSet.role = "admin";
   }

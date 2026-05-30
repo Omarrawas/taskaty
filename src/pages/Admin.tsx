@@ -27,6 +27,12 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const utils = trpc.useUtils();
 
+  // Modal states for balance adjustment
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [balanceAmount, setBalanceAmount] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+
   // Queries
   const { data: stats } = trpc.admin.stats.useQuery(undefined, {
     retry: false,
@@ -34,7 +40,6 @@ export default function Admin() {
   });
   const { data: users } = trpc.admin.users.useQuery(undefined, { enabled: activeTab === "users" });
   const { data: pendingServices } = trpc.admin.services.useQuery(undefined, { enabled: activeTab === "dashboard" || activeTab === "services" });
-  // const { data: recentOrders } = trpc.admin.orders.useQuery(undefined, { enabled: activeTab === "orders" });
   const { data: withdrawals } = trpc.admin.withdrawals.useQuery(undefined, { enabled: activeTab === "withdrawals" });
   const { data: deposits } = trpc.admin.deposits.useQuery(undefined, { enabled: activeTab === "deposits" });
 
@@ -64,71 +69,66 @@ export default function Admin() {
   const adjustBalance = trpc.admin.adjustBalance.useMutation({
     onSuccess: () => {
       toast.success("تم تعديل الرصيد بنجاح");
+      setIsBalanceModalOpen(false);
+      setBalanceAmount("");
+      setAdjustNote("");
       utils.admin.users.invalidate();
       utils.admin.stats.invalidate();
-      setIsBalanceModalOpen(false);
     }
   });
 
   const promoteToAdmin = trpc.admin.promoteToAdmin.useMutation({
     onSuccess: () => {
-      toast.success("تم ترقية المستخدم إلى مسؤول بنجاح");
+      toast.success("تم ترقية المستخدم إلى مدير بنجاح");
       utils.admin.users.invalidate();
     }
   });
-
-  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [balanceAmount, setBalanceAmount] = useState("");
-  const [adjustNote, setAdjustNote] = useState("");
 
   const updateWithdrawal = trpc.admin.updateWithdrawal.useMutation({
     onSuccess: () => {
       toast.success("تم تحديث حالة طلب السحب");
       utils.admin.withdrawals.invalidate();
+      utils.admin.stats.invalidate();
     }
   });
 
   const dashboardStats = [
-    { label: "المستخدمون", value: stats?.users ?? 0, icon: Users, color: "bg-blue-50 text-blue-600" },
-    { label: "إجمالي المبيعات", value: stats?.totalSales ?? 0, isCurrency: true, icon: ShoppingCart, color: "bg-purple-50 text-purple-600" },
-    { label: "رصيد المحافظ", value: stats?.totalWalletBalance ?? 0, isCurrency: true, icon: Wallet, color: "bg-amber-50 text-amber-600" },
-    { label: "إجمالي الإيداعات", value: stats?.totalDeposited ?? 0, isCurrency: true, icon: CheckCircle, color: "bg-green-50 text-green-600" },
-    { label: "إجمالي السحوبات", value: stats?.totalWithdrawn ?? 0, isCurrency: true, icon: AlertTriangle, color: "bg-red-50 text-red-600" },
-    { label: "معدل الإنجاز", value: stats?.completionRate ?? 0, isPercent: true, icon: CheckCircle, color: "bg-[#E8F5F0] text-[#0D5D48]" },
+    { label: "إجمالي المبيعات", value: stats?.totalSales ?? 0, icon: ShoppingCart, color: "bg-blue-50 text-blue-600", isCurrency: true },
+    { label: "رصيد المستخدمين", value: stats?.totalWalletBalance ?? 0, icon: Wallet, color: "bg-[#E8F5F0] text-[#0D5D48]", isCurrency: true },
+    { label: "طلبات الشحن المعلقة", value: stats?.pendingDepositsCount ?? 0, icon: CheckCircle, color: "bg-amber-50 text-amber-600" },
+    { label: "إجمالي المستخدمين", value: stats?.users ?? 0, icon: Users, color: "bg-purple-50 text-purple-600" },
+    { label: "إجمالي الطلبات", value: stats?.orders ?? 0, icon: ShoppingCart, color: "bg-indigo-50 text-indigo-600" },
+    { label: "الخدمات المنشورة", value: stats?.services ?? 0, icon: Package, color: "bg-orange-50 text-orange-600" },
   ];
 
   return (
     <div className="min-h-screen bg-[#FAFBF7]">
       <Header />
       <div className="pt-[72px] flex">
-        <aside className="hidden lg:block w-64 shrink-0 bg-white border-l border-[#E5E5DF] sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white border-l border-[#E5E5DF] h-[calc(100vh-72px)] sticky top-[72px] hidden md:block">
           <div className="p-6">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-red-400 flex items-center justify-center shadow-lg shadow-red-200">
-                <span className="text-white font-bold text-lg">أ</span>
-              </div>
-              <div>
-                <p className="font-bold text-[#1A1A2E] text-sm">لوحة الإدارة</p>
-                <Badge className="bg-red-50 text-red-600 border-0 text-[10px] py-0 px-2 h-4">مسؤول النظام</Badge>
-              </div>
-            </div>
+            <h1 className="text-xl font-black text-[#1A1A2E] mb-6">لوحة الإدارة</h1>
             <nav className="space-y-1">
               {sidebarItems.map((item) => (
-                <button key={item.value} onClick={() => setActiveTab(item.value)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-right ${activeTab === item.value ? "bg-[#0D5D48] text-white shadow-lg shadow-[#0D5D48]/20" : "text-gray-600 hover:bg-[#E8F5F0] hover:text-[#0D5D48]"}`}>
-                  <item.icon className="w-5 h-5" />{item.label}
+                <button
+                  key={item.value}
+                  onClick={() => setActiveTab(item.value)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
+                    activeTab === item.value
+                      ? "bg-[#0D5D48] text-white shadow-lg shadow-[#0D5D48]/20"
+                      : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
                 </button>
               ))}
             </nav>
-            <div className="mt-8 pt-6 border-t border-[#E5E5DF]">
-              <Link to="/" className="text-sm text-gray-500 hover:text-[#0D5D48] flex items-center gap-2 px-4">
-                <ChevronLeft className="w-4 h-4" />العودة للموقع
-              </Link>
-            </div>
           </div>
         </aside>
 
+        {/* Main Content */}
         <main className="flex-1 min-w-0 p-4 sm:p-8">
           {activeTab === "dashboard" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -149,7 +149,7 @@ export default function Admin() {
                     </div>
                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">{stat.label}</p>
                     <p className="text-2xl font-black text-[#1A1A2E]">
-                      {stat.isCurrency ? `${Number(stat.value).toLocaleString()} ل.س` : stat.isPercent ? `${stat.value}%` : Number(stat.value).toLocaleString()}
+                      {stat.isCurrency ? `${Number(stat.value).toLocaleString()} ل.س` : stat.value}
                     </p>
                   </div>
                 ))}
@@ -189,11 +189,6 @@ export default function Admin() {
                     {(!pendingServices || pendingServices.length === 0) && (
                       <p className="text-gray-400 text-center py-10 text-sm italic">لا توجد خدمات بانتظار المراجعة</p>
                     )}
-                  </div>
-                  <div className="mt-6">
-                     <Button onClick={() => setActiveTab("deposits")} className="w-full bg-[#0D5D48] rounded-xl h-12 gap-2">
-                        مراجعة طلبات الإيداع المفتوحة ({stats?.pendingDepositsCount ?? 0})
-                     </Button>
                   </div>
                 </div>
 
@@ -259,7 +254,10 @@ export default function Admin() {
                               <TableCell>
                                 <div className="flex items-center gap-3">
                                   <img src={u.avatar ?? `https://api.dicebear.com/7.x/initials/svg?seed=${u.name}`} alt="" className="w-10 h-10 rounded-2xl object-cover" />
-                                  <div><p className="font-bold text-sm text-[#1A1A2E]">{u.name}</p><p className="text-[10px] text-gray-500">{u.email}</p></div>
+                                  <div>
+                                    <p className="font-bold text-sm text-[#1A1A2E]">{u.name}</p>
+                                    <p className="text-[10px] text-gray-500">{u.email}</p>
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell><Badge variant="secondary" className="bg-blue-50 text-blue-600 border-0 text-[10px]">{u.role}</Badge></TableCell>
@@ -267,20 +265,18 @@ export default function Admin() {
                               <TableCell className="text-xs text-gray-500">{new Date(u.createdAt || "").toLocaleDateString("ar-SY")}</TableCell>
                               <TableCell>
                                 <div className="flex gap-2">
+                                  <Button 
+                                    onClick={() => {
+                                      setSelectedUser(u);
+                                      setIsBalanceModalOpen(true);
+                                    }}
+                                    size="sm" variant="outline" className="rounded-xl h-8 text-xs border-[#0D5D48] text-[#0D5D48]">تعديل الرصيد</Button>
+                                  {u.role !== "admin" && (
                                     <Button 
-                                      onClick={() => {
-                                        setSelectedUser(u);
-                                        setIsBalanceModalOpen(true);
-                                      }}
-                                      size="sm" variant="outline" className="rounded-xl h-8 text-xs border-[#0D5D48] text-[#0D5D48]">تعديل الرصيد</Button>
-                                    
-                                    {u.role !== "admin" && (
-                                      <Button 
-                                        onClick={() => promoteToAdmin.mutate({ userId: u.id })}
-                                        size="sm" variant="outline" className="rounded-xl h-8 text-xs border-amber-500 text-amber-600 hover:bg-amber-50">ترقية لمدير</Button>
-                                    )}
-                                    
-                                    <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">إدارة</Button>
+                                      onClick={() => promoteToAdmin.mutate({ userId: u.id })}
+                                      size="sm" variant="outline" className="rounded-xl h-8 text-xs border-amber-500 text-amber-600 hover:bg-amber-50">ترقية لمدير</Button>
+                                  )}
+                                  <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">إدارة</Button>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -291,35 +287,35 @@ export default function Admin() {
                   </TabsContent>
                 ))}
               </Tabs>
-            </div>
 
-              {/* Balance Modal */}
-              <div className={`${isBalanceModalOpen ? 'fixed' : 'hidden'} inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
-                <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
-                   <h3 className="text-xl font-black text-[#1A1A2E] mb-6">تعديل رصيد: {selectedUser?.name}</h3>
-                   <div className="space-y-4">
+              {/* Balance Adjustment Modal */}
+              {isBalanceModalOpen && selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                  <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
+                    <h3 className="text-xl font-black text-[#1A1A2E] mb-6">تعديل رصيد: {selectedUser.name}</h3>
+                    <div className="space-y-4">
                       <div>
-                         <label className="text-xs font-bold text-gray-400 mb-1.5 block">المبلغ (سالب للخصم، موجب للإضافة)</label>
-                         <input 
-                           type="number" 
-                           value={balanceAmount}
-                           onChange={(e) => setBalanceAmount(e.target.value)}
-                           placeholder="مثال: 5000 أو -2000"
-                           className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-[#0D5D48] outline-none"
-                         />
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">المبلغ (سالب للخصم، موجب للإضافة)</label>
+                        <input 
+                          type="number" 
+                          value={balanceAmount}
+                          onChange={(e) => setBalanceAmount(e.target.value)}
+                          placeholder="مثال: 5000 أو -2000"
+                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-[#0D5D48] outline-none"
+                        />
                       </div>
                       <div>
-                         <label className="text-xs font-bold text-gray-400 mb-1.5 block">سبب التعديل (ملاحظة)</label>
-                         <input 
-                           type="text" 
-                           value={adjustNote}
-                           onChange={(e) => setAdjustNote(e.target.value)}
-                           placeholder="شحن يدوي عبر الشام كاش"
-                           className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm focus:ring-2 focus:ring-[#0D5D48] outline-none"
-                         />
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">سبب التعديل (ملاحظة)</label>
+                        <input 
+                          type="text" 
+                          value={adjustNote}
+                          onChange={(e) => setAdjustNote(e.target.value)}
+                          placeholder="شحن يدوي عبر الشام كاش"
+                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm focus:ring-2 focus:ring-[#0D5D48] outline-none"
+                        />
                       </div>
-                   </div>
-                   <div className="flex gap-3 mt-8">
+                    </div>
+                    <div className="flex gap-3 mt-8">
                       <Button 
                         disabled={adjustBalance.isPending}
                         onClick={() => adjustBalance.mutate({ userId: selectedUser.id, amount: balanceAmount, description: adjustNote })}
@@ -334,9 +330,11 @@ export default function Admin() {
                       >
                         إلغاء
                       </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
           )}
 
           {activeTab === "services" && (
@@ -344,7 +342,15 @@ export default function Admin() {
               <h2 className="text-2xl font-bold text-[#1A1A2E] mb-6">كل الخدمات</h2>
               <div className="bg-white rounded-2xl shadow-xl border border-[#E5E5DF]/50 overflow-hidden">
                 <Table>
-                  <TableHeader><TableRow className="bg-gray-50"><TableHead className="text-right">الخدمة</TableHead><TableHead className="text-right">البائع</TableHead><TableHead className="text-right">السعر</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-right">إجراءات</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="text-right">الخدمة</TableHead>
+                      <TableHead className="text-right">البائع</TableHead>
+                      <TableHead className="text-right">السعر</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">إجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {pendingServices?.map((service: any) => (
                       <TableRow key={service.id}>
@@ -352,18 +358,18 @@ export default function Admin() {
                         <TableCell className="text-sm font-medium">{service.sellerName}</TableCell>
                         <TableCell className="text-sm font-black text-[#0D5D48]">{Number(service.price).toLocaleString()} ل.س</TableCell>
                         <TableCell>
-                           <Badge className={`${service.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'} border-0 text-[10px]`}>
-                              {service.status === 'active' ? 'نشط' : 'معطل/مرفوض'}
-                           </Badge>
+                          <Badge className={`${service.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'} border-0 text-[10px]`}>
+                            {service.status === 'active' ? 'نشط' : 'معطل/مرفوض'}
+                          </Badge>
                         </TableCell>
                         <TableCell>
-                           <div className="flex gap-2">
-                             {service.status !== 'active' ? (
-                               <Button onClick={() => approveService.mutate({ id: service.id })} size="sm" className="bg-green-600 rounded-lg h-8 px-3 text-xs">تفعيل</Button>
-                             ) : (
-                               <Button onClick={() => rejectService.mutate({ id: service.id })} variant="destructive" size="sm" className="rounded-lg h-8 px-3 text-xs">تعطيل</Button>
-                             )}
-                           </div>
+                          <div className="flex gap-2">
+                            {service.status !== 'active' ? (
+                              <Button onClick={() => approveService.mutate({ id: service.id })} size="sm" className="bg-green-600 rounded-lg h-8 px-3 text-xs">تفعيل</Button>
+                            ) : (
+                              <Button onClick={() => rejectService.mutate({ id: service.id })} variant="destructive" size="sm" className="rounded-lg h-8 px-3 text-xs">تعطيل</Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -392,8 +398,8 @@ export default function Admin() {
                       <TableRow key={w.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                             <img src={w.userAvatar || ""} className="w-8 h-8 rounded-full" />
-                             <span className="text-sm font-bold">{w.userName}</span>
+                            <img src={w.userAvatar || ""} className="w-8 h-8 rounded-full" />
+                            <span className="text-sm font-bold">{w.userName}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm font-black text-red-600">{Number(w.amount).toLocaleString()} ل.س</TableCell>
@@ -423,7 +429,7 @@ export default function Admin() {
                       <TableHead className="text-right">المستخدم</TableHead>
                       <TableHead className="text-right">المبلغ</TableHead>
                       <TableHead className="text-right">الوسيلة</TableHead>
-                      <TableHead className="text-right">الرقم المرجعي</TableHead>
+                      <TableHead className="text-right">الالرقم المرجعي</TableHead>
                       <TableHead className="text-right">إجراءات</TableHead>
                     </TableRow>
                   </TableHeader>

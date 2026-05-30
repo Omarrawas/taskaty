@@ -95,7 +95,16 @@ export default function Dashboard() {
               ))}
             </nav>
 
-            <div className="mt-8 pt-6 border-t border-[#E5E5DF]">
+            <div className="mt-8 pt-6 border-t border-[#E5E5DF] space-y-3">
+              {user?.role === "admin" && (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-2 text-sm font-bold text-white bg-[#0D5D48] hover:bg-[#094533] transition-colors px-4 py-3 rounded-xl"
+                >
+                  <span className="text-base">⚙️</span>
+                  لوحة الإدارة
+                </Link>
+              )}
               <Link to="/" className="text-sm text-gray-500 hover:text-[#0D5D48] transition-colors flex items-center gap-2">
                 <ChevronLeft className="w-4 h-4" />
                 العودة للموقع

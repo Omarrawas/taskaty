@@ -82,6 +82,15 @@ export default function Header() {
                   />
                   <span>{user.name}</span>
                 </Link>
+                {user.role === "admin" && (
+                  <Link
+                    to="/admin"
+                    className="flex items-center gap-1.5 bg-[#0D5D48] text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#094533] transition-colors"
+                  >
+                    <span>⚙️</span>
+                    لوحة الإدارة
+                  </Link>
+                )}
                 <button
                   onClick={() => logout()}
                   className="p-2 text-gray-500 hover:text-red-500 transition-colors"
@@ -153,6 +162,14 @@ export default function Header() {
                       <p className="text-sm text-gray-500">{user.email}</p>
                     </div>
                   </div>
+                  {user.role === "admin" && (
+                    <Link
+                      to="/admin"
+                      className="flex items-center gap-2 font-bold py-2 px-4 bg-[#E8F5F0] text-[#0D5D48] rounded-xl"
+                    >
+                      ⚙️ لوحة الإدارة
+                    </Link>
+                  )}
                   <button
                     onClick={() => logout()}
                     className="flex items-center gap-2 text-red-500 font-medium py-2 px-4 hover:bg-red-50 rounded-xl transition-colors"

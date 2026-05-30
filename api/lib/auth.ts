@@ -39,8 +39,9 @@ export async function authenticateRequest(req: Request): Promise<AuthedUser | nu
       email: email,
       name: decodedToken.name || email?.split("@")[0] || "User",
       avatar: decodedToken.picture,
+      // Only set role=admin for admin emails on insert; don't overwrite seller roles
       role: isAdmin ? "admin" : "buyer",
-    });
+    }, isAdmin);
     console.log("[Auth] DB Sync completed. DB ID:", dbUser?.id);
 
     if (!dbUser) {
