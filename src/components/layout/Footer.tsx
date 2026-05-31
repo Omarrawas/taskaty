@@ -7,7 +7,15 @@ const quickLinks = [
   { label: "الرئيسية", href: "/" },
   { label: "تصفح الخدمات", href: "/services" },
   { label: "البائعون", href: "/sellers" },
+  { label: "كيف يعمل", href: "/how-it-works" },
+  { label: "عن المنصة", href: "/about" },
+];
+
+const supportLinks = [
   { label: "الأسئلة الشائعة", href: "/faq" },
+  { label: "تواصل معنا", href: "/contact" },
+  { label: "شروط البائعين", href: "/seller-terms" },
+  { label: "الشروط والأحكام", href: "/terms" },
   { label: "سياسة الخصوصية", href: "/privacy" },
 ];
 
@@ -56,6 +64,20 @@ export default function Footer() {
             <h4 className="text-white font-semibold text-lg mb-5">روابط سريعة</h4>
             <ul className="space-y-3">
               {quickLinks.map((link) => (
+                <li key={link.href}>
+                  <Link to={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Support Links */}
+          <div>
+            <h4 className="text-white font-semibold text-lg mb-5">الدعم والمساعدة</h4>
+            <ul className="space-y-3">
+              {supportLinks.map((link) => (
                 <li key={link.href}>
                   <Link to={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
                     {link.label}

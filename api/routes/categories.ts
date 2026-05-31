@@ -7,7 +7,6 @@ export const categoriesRouter = createRouter({
     try {
       return await listCategories();
     } catch (err: any) {
-      console.error("[Categories DB Error]:", err.message);
       return [
         { id: 1, name: "برمجة وتطوير", slug: "dev", icon: "code" },
         { id: 2, name: "تصميم جرافيك", slug: "design", icon: "palette" },

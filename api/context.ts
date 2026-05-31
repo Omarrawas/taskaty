@@ -15,7 +15,6 @@ export async function createContext(
     // Pass the raw request to authenticateRequest
     ctx.user = await authenticateRequest(opts.req);
   } catch (err: any) {
-    console.error("[Context Creation Error]:", err.message);
     // Authentication is optional here
   }
   return ctx;

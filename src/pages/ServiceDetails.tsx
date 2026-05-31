@@ -10,19 +10,22 @@ import Footer from "@/components/layout/Footer";
 import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
 import { ChatDialog } from "@/components/chat/ChatDialog";
+import ServicePackages, { defaultPackages, type Package } from "@/components/ServicePackages";
+import { getServiceImage } from "@/lib/storage";
 
 export default function ServiceDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedExtras, setSelectedExtras] = useState<number[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLowBalanceOpen, setIsLowBalanceOpen] = useState(false);
 
   // Queries
   const { data: service, isLoading, error } = trpc.services.bySlug.useQuery({ slug: slug || "" }, { enabled: !!slug });
-  const { data: serviceReviews } = trpc.reviews.byService.useQuery({ serviceId: service?.id || 0 }, { enabled: !!service?.id });
-  const { data: seller } = trpc.sellers.profile.useQuery({ id: service?.sellerId || 0 }, { enabled: !!service?.sellerId });
+  const { data: serviceReviews } = trpc.reviews.byService.useQuery({ serviceId: service?.id || "" }, { enabled: !!service?.id });
+  const { data: seller } = trpc.sellers.profile.useQuery({ id: service?.sellerId || "" }, { enabled: !!service?.sellerId });
 
   // Mutations
   const createOrder = trpc.orders.create.useMutation({
@@ -69,15 +72,25 @@ export default function ServiceDetails() {
   }
 
   const images = service.images as string[] || [];
-  const mainImage = images[selectedImage] || "https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&q=80&w=800";
+  const mainImage = images[selectedImage] || getServiceImage(images, service?.categorySlug);
   const priceNum = parseFloat(service.price);
   const extras = (service as any).extras as any[] || [];
+  
+  // Get packages from service or use defaults with service price
+  const servicePackages: Package[] = (service as any).packages || defaultPackages.map(pkg => ({
+    ...pkg,
+    price: pkg.id === "basic" ? priceNum : 
+           pkg.id === "standard" ? Math.round(priceNum * 1.5) : 
+           Math.round(priceNum * 2.5),
+  }));
 
   const extrasTotal = selectedExtras.reduce((sum, idx) => {
     const extra = extras[idx];
     return extra ? sum + extra.price : sum;
   }, 0);
-  const totalPrice = priceNum + extrasTotal;
+  
+  const packagePrice = selectedPackage?.price || priceNum;
+  const totalPrice = packagePrice + extrasTotal;
 
   const toggleExtra = (idx: number) => {
     setSelectedExtras((prev) =>
@@ -85,10 +98,15 @@ export default function ServiceDetails() {
     );
   };
 
+  const handleSelectPackage = (pkg: Package) => {
+    setSelectedPackage(pkg);
+  };
+
   const handleOrder = () => {
     createOrder.mutate({
       serviceSlug: service.slug,
       extras: selectedExtras.map(idx => extras[idx]),
+      packageId: selectedPackage?.id,
     });
   };
 
@@ -279,24 +297,37 @@ export default function ServiceDetails() {
           {/* Sidebar */}
           <aside className="w-full lg:w-[400px] shrink-0">
             <div className="lg:sticky lg:top-24 space-y-6">
+              {/* Packages Selection */}
+              <ServicePackages
+                packages={servicePackages}
+                onSelect={handleSelectPackage}
+                selectedPackageId={selectedPackage?.id}
+              />
+
               {/* Order Card */}
               <div className="bg-[#0D5D48] rounded-[2.5rem] p-8 text-white shadow-2xl shadow-[#0D5D48]/20 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16" />
                 
-                <h4 className="text-sm font-bold opacity-70 uppercase tracking-widest mb-2">سعر الخدمة يبدأ من</h4>
+                <h4 className="text-sm font-bold opacity-70 uppercase tracking-widest mb-2">
+                  {selectedPackage ? `باقة ${selectedPackage.nameAr}` : "سعر الخدمة يبدأ من"}
+                </h4>
                 <div className="flex items-baseline gap-2 mb-8">
-                  <span className="text-4xl font-extrabold">{priceNum.toLocaleString()}</span>
+                  <span className="text-4xl font-extrabold">{packagePrice.toLocaleString()}</span>
                   <span className="text-lg opacity-80">ل.س</span>
                 </div>
 
                 <div className="flex flex-col gap-4 mb-8">
                   <div className="flex items-center gap-3 text-sm bg-white/10 px-4 py-3 rounded-2xl backdrop-blur-md">
                     <Clock className="w-5 h-5 text-amber-300" />
-                    <span>جاهزة للتسليم خلال <b>{service.deliveryTime} أيام</b></span>
+                    <span>جاهزة للتسليم خلال <b>{selectedPackage?.deliveryTime || service.deliveryTime} أيام</b></span>
                   </div>
                   <div className="flex items-center gap-3 text-sm bg-white/10 px-4 py-3 rounded-2xl backdrop-blur-md">
                     <RefreshCcw className="w-5 h-5 text-blue-300" />
-                    <span>تعديلات مجانية حتى الرضا</span>
+                    <span>
+                      {selectedPackage?.revisions === -1 
+                        ? "تعديلات غير محدودة" 
+                        : `${selectedPackage?.revisions || 1} تعديلات`}
+                    </span>
                   </div>
                 </div>
 
@@ -337,10 +368,14 @@ export default function ServiceDetails() {
 
                 <Button 
                    onClick={handleOrder}
-                   disabled={createOrder.isPending}
-                   className="w-full bg-white text-[#0D5D48] hover:bg-gray-100 rounded-2xl h-14 text-lg font-black shadow-lg shadow-black/10 active:scale-[0.98] transition-transform"
+                   disabled={createOrder.isPending || !selectedPackage}
+                   className="w-full bg-white text-[#0D5D48] hover:bg-gray-100 rounded-2xl h-14 text-lg font-black shadow-lg shadow-black/10 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {createOrder.isPending ? "جاري المعالجة..." : "اشترِ الخدمة الآن"}
+                  {createOrder.isPending 
+                    ? "جاري المعالجة..." 
+                    : selectedPackage 
+                      ? `اشترِ باقة ${selectedPackage.nameAr} الآن`
+                      : "اختر باقة أولاً"}
                 </Button>
 
                 <p className="text-[10px] text-center mt-6 opacity-50 flex items-center justify-center gap-2">

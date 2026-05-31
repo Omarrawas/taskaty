@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import SearchInput from "@/components/SearchInput";
 
 const stats = [
   { value: "12,000+", label: "خدمة" },
@@ -39,21 +38,11 @@ export default function Hero() {
 
         {/* Search Bar */}
         <div className="max-w-xl mx-auto mb-10 animate-fade-in-up stagger-3">
-          <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] p-2 flex items-center gap-2">
-            <Search className="w-5 h-5 text-gray-400 mr-3 shrink-0" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="ما الخدمة التي تبحث عنها؟"
-              className="border-0 shadow-none focus-visible:ring-0 text-right text-[#1A1A2E] placeholder:text-gray-400 bg-transparent flex-1 h-12"
-            />
-            <Button
-              className="bg-[#0D5D48] hover:bg-[#094533] text-white rounded-xl px-6 h-12 font-semibold shrink-0"
-              asChild
-            >
-              <Link to={`/services?q=${search}`}>بحث</Link>
-            </Button>
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="ما الخدمة التي تبحث عنها؟"
+          />
         </div>
 
         {/* Stats */}

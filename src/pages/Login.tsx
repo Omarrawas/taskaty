@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation, Link } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
-import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
 
 type Mode = "login" | "register";
@@ -21,7 +20,6 @@ type Mode = "login" | "register";
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const utils = trpc.useUtils();
 
   const initialMode = location.pathname === "/register" ? "register" : "login";
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -31,11 +29,8 @@ export default function Login() {
 
   // Handle auth state changes
   useEffect(() => {
-    console.log("Login page mounted, listening for auth state...");
-
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("[Login] onAuthStateChanged: User detected!", user.email);
         setLoading(true);
         toast.success("مرحباً بك!");
         
@@ -57,13 +52,10 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       setLoading(true);
-      console.log("[Login] Starting Google Sign-In (Popup)...");
-      const result = await signInWithPopup(auth, provider);
-      console.log("[Login] Popup success! User:", result.user.email);
+      await signInWithPopup(auth, provider);
       toast.success("مرحباً بك!");
       navigate("/");
     } catch (error: any) {
-      console.error("[Login] Google Sign-In Error:", error.code, error.message);
       toast.error(error?.message || "فشل تسجيل الدخول");
     } finally {
       setLoading(false);
@@ -83,21 +75,11 @@ export default function Login() {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      await utils.invalidate();
-      // تحقق من أن API التعرف على الحالة يعمل
-      try {
-        const result = await utils.client.auth.me.query();
-        if (result) {
-          navigate("/");
-        } else {
-          toast.error("تم تسجيل الدخول ولكن API لا يتعرف على المستخدم. تحقق من إعدادات الخادم.");
-        }
-      } catch (apiErr: any) {
-        console.error("[Login] auth.me after login failed:", apiErr);
-        toast.error(`تم تسجيل الدخول ولكن فشل الاتصال بالخادم: ${apiErr?.message || "خطأ غير معروف"}`);
-      }
+      // Firebase login/register succeeded — onAuthStateChanged in AuthProvider
+      // will pick up the new user & fire auth.me automatically.
+      // No need to call auth.me manually here.
+      navigate("/");
     } catch (error: any) {
-      console.error("[Login] Email Auth Error:", error.code, error.message);
       let errorMsg = "فشل التحقق من البيانات";
       if (error.code === "auth/user-not-found") errorMsg = "المستخدم غير موجود";
       else if (error.code === "auth/wrong-password") errorMsg = "كلمة المرور خاطئة";
@@ -150,6 +132,11 @@ export default function Login() {
                 required
                 dir="ltr"
               />
+              {mode === "login" && (
+                <Link to="/forgot-password" className="block text-xs text-[#0D5D48] hover:underline text-left">
+                  نسيت كلمة المرور؟
+                </Link>
+              )}
             </div>
             <Button type="submit" className="w-full h-12 text-base font-medium" disabled={loading}>
               {loading

@@ -9,6 +9,9 @@ import { reviewsRouter } from "./routes/reviews";
 import { chatRouter } from "./routes/chat";
 import { adminRouter } from "./routes/admin";
 import { notificationsRouter } from "./routes/notifications";
+import { disputesRouter } from "./routes/disputes";
+import { favoritesRouter } from "./routes/favorites";
+import { referralsRouter } from "./routes/referrals";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -22,6 +25,9 @@ export const appRouter = createRouter({
   chat: chatRouter,
   admin: adminRouter,
   notifications: notificationsRouter,
+  disputes: disputesRouter,
+  favorites: favoritesRouter,
+  referrals: referralsRouter,
 });
 
 export type AppRouter = typeof appRouter;

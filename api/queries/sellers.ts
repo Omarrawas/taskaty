@@ -1,74 +1,72 @@
-import { eq, desc } from "drizzle-orm";
-import { getDb } from "./connection";
-import * as schema from "../../db/schema";
+import { db } from "../lib/firebase-admin";
+import { COLLECTIONS } from "../lib/firestore-utils";
 
 export async function listTopSellers(limit = 10) {
-  return getDb()
-    .select({
-      id: schema.users.id,
-      name: schema.users.name,
-      avatar: schema.users.avatar,
-      unionId: schema.users.unionId,
-      bio: schema.sellerProfiles.bio,
-      skills: schema.sellerProfiles.skills,
-      level: schema.sellerProfiles.level,
-      rating: schema.sellerProfiles.rating,
-      totalOrders: schema.sellerProfiles.totalOrders,
-      completedOrders: schema.sellerProfiles.completedOrders,
-      responseTime: schema.sellerProfiles.responseTime,
-      badges: schema.sellerProfiles.badges,
-    })
-    .from(schema.users)
-    .innerJoin(schema.sellerProfiles, eq(schema.sellerProfiles.userId, schema.users.id))
-    .where(eq(schema.users.status, "active"))
-    .orderBy(desc(schema.sellerProfiles.rating))
-    .limit(limit);
+  if (!db) return [];
+  
+  // Query users with role "seller"
+  const snapshot = await db.collection(COLLECTIONS.USERS)
+    .where("role", "==", "seller")
+    .get();
+    
+  const sellers = snapshot.docs.map(doc => {
+    const userData = doc.data();
+    return {
+      id: doc.id,
+      unionId: doc.id,
+      name: userData.name,
+      avatar: userData.avatar,
+      email: userData.email,
+      rating: userData.rating || "4.5",
+      totalOrders: userData.totalOrders || 0,
+      level: userData.level || "بائع موثوق",
+      createdAt: userData.createdAt,
+    };
+  });
+  
+  // Sort by totalOrders and limit
+  sellers.sort((a: any, b: any) => (b.totalOrders || 0) - (a.totalOrders || 0));
+  
+  return sellers.slice(0, limit);
 }
 
-export async function findSellerById(userId: number) {
-  const rows = await getDb()
-    .select({
-      id: schema.users.id,
-      name: schema.users.name,
-      avatar: schema.users.avatar,
-      unionId: schema.users.unionId,
-      email: schema.users.email,
-      createdAt: schema.users.createdAt,
-      bio: schema.sellerProfiles.bio,
-      skills: schema.sellerProfiles.skills,
-      level: schema.sellerProfiles.level,
-      rating: schema.sellerProfiles.rating,
-      totalOrders: schema.sellerProfiles.totalOrders,
-      completedOrders: schema.sellerProfiles.completedOrders,
-      responseTime: schema.sellerProfiles.responseTime,
-      portfolio: schema.sellerProfiles.portfolio,
-      badges: schema.sellerProfiles.badges,
-    })
-    .from(schema.users)
-    .innerJoin(schema.sellerProfiles, eq(schema.sellerProfiles.userId, schema.users.id))
-    .where(eq(schema.users.id, userId))
-    .limit(1);
-  return rows.at(0);
+export async function findSellerById(userId: string) {
+  if (!db) return null;
+  
+  const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+  if (!userDoc.exists) return null;
+  
+  const userData = userDoc.data();
+  
+  // Get seller's services count
+  const servicesSnapshot = await db.collection(COLLECTIONS.SERVICES)
+    .where("sellerId", "==", userId)
+    .where("status", "==", "active")
+    .get();
+  
+  return {
+    id: userId,
+    unionId: userId,
+    name: userData?.name,
+    avatar: userData?.avatar,
+    email: userData?.email,
+    role: userData?.role,
+    createdAt: userData?.createdAt,
+    totalOrders: userData?.totalOrders || servicesSnapshot.size,
+    rating: userData?.rating || "4.5",
+    level: userData?.level || "بائع موثوق",
+    bio: userData?.bio || "بائع على منصة Taskaty",
+    skills: userData?.skills || [],
+  };
 }
 
-export async function upsertSellerProfile(
-  userId: number,
-  data: Partial<typeof schema.sellerProfiles.$inferInsert>,
-) {
-  const existing = await getDb()
-    .select({ id: schema.sellerProfiles.id })
-    .from(schema.sellerProfiles)
-    .where(eq(schema.sellerProfiles.userId, userId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    await getDb()
-      .update(schema.sellerProfiles)
-      .set(data)
-      .where(eq(schema.sellerProfiles.userId, userId));
-  } else {
-    await getDb()
-      .insert(schema.sellerProfiles)
-      .values({ userId, ...data });
-  }
+export async function upsertSellerProfile(userId: string, data: any) {
+  if (!db) return;
+  
+  // Update user document with seller profile data
+  await db.collection(COLLECTIONS.USERS).doc(userId).set({
+    ...data,
+    role: "seller",
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
 }

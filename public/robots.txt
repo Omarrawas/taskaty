@@ -1,0 +1,8 @@
+# robots.txt for Taskaty
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api/
+
+Sitemap: https://taskaty.app/sitemap.xml

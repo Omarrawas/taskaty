@@ -12,7 +12,7 @@ import { useState } from "react";
 
 export default function SellerProfile() {
   const { id } = useParams<{ id: string }>();
-  const sellerId = parseInt(id || "0");
+  const sellerId = id || "";
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Queries
@@ -74,16 +74,16 @@ export default function SellerProfile() {
                     </Badge>
                  </div>
                  
-                 <p className="text-gray-500 text-sm max-w-2xl leading-relaxed mb-6 italic">"{seller.bio || "بائع خبير في منصة خدماتي يسعى لتقديم الأطول لعملائه."}"</p>
+                 <p className="text-gray-500 text-sm max-w-2xl leading-relaxed mb-6 italic">"{(seller as any).bio || "بائع خبير في منصة خدماتي يسعى لتقديم الأطول لعملائه."}"</p>
                  
                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-8">
                     <div className="flex items-center gap-2">
                        <Zap className="w-5 h-5 text-amber-400" />
-                       <span className="text-sm font-bold text-[#1A1A2E]">{seller.rating} <span className="text-gray-400 font-normal">تقييم النجوم</span></span>
+                       <span className="text-sm font-bold text-[#1A1A2E]">{(seller as any).rating} <span className="text-gray-400 font-normal">تقييم النجوم</span></span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                        <ShoppingBag className="w-5 h-5" />
-                       <span className="text-sm font-bold">{seller.totalOrders} <span className="font-normal">طلب مكتمل</span></span>
+                       <span className="text-sm font-bold">{(seller as any).totalOrders} <span className="font-normal">طلب مكتمل</span></span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                        <Globe className="w-5 h-5" />
@@ -128,7 +128,7 @@ export default function SellerProfile() {
                </div>
             ) : sellerServices && sellerServices.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                {sellerServices.map((service: { id: number; sellerId: number; title: string; slug: string; price: string; images: unknown; rating: string | null; totalReviews: number | null; featured: boolean | null; deliveryTime: number | null }, i: number) => (
+                {sellerServices.map((service: any, i: number) => (
                   <div key={service.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 0.05}s`, opacity: 0 }}>
                     <ServiceCard
                       id={service.id}
@@ -141,6 +141,7 @@ export default function SellerProfile() {
                       totalReviews={service.totalReviews ?? 0}
                       featured={service.featured ?? false}
                       deliveryTime={service.deliveryTime ?? 3}
+                      categorySlug={service.categorySlug}
                     />
                   </div>
                 ))}
@@ -158,7 +159,7 @@ export default function SellerProfile() {
               <h3 className="text-[#1A1A2E] font-black text-2xl mb-8">تقييمات العملاء</h3>
               {sellerReviews && sellerReviews.length > 0 ? (
                 <div className="space-y-10">
-                  {sellerReviews.map((review: { id: number; reviewerAvatar: string | null; reviewerName: string; rating: number; createdAt: string | null; comment: string | null; serviceTitle?: string }) => (
+                  {sellerReviews.map((review: any) => (
                     <div key={review.id} className="flex flex-col sm:flex-row gap-6 p-6 rounded-3xl hover:bg-gray-50 transition-colors group">
                       <img src={review.reviewerAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${review.reviewerName}`} alt="" className="w-16 h-16 rounded-2xl object-cover" />
                       <div className="flex-1">
@@ -193,7 +194,7 @@ export default function SellerProfile() {
           <TabsContent value="about" className="animate-in fade-in duration-500 outline-none">
             <div className="bg-white rounded-[2.5rem] p-10 shadow-[0_4px_30px_rgba(0,0,0,0.03)] border border-[#E5E5DF]/50">
               <h3 className="text-[#1A1A2E] font-black text-2xl mb-6">نبذة شخصية</h3>
-              <p className="text-gray-600 leading-relaxed text-lg mb-10">{seller.bio || "بائع متميز في منصة خدماتي يسير بخطى ثابتة نحو تحقيق أفضل النتائج لعملائه."}</p>
+              <p className="text-gray-600 leading-relaxed text-lg mb-10">{(seller as any).bio || "بائع متميز في منصة خدماتي يسير بخطى ثابتة نحو تحقيق أفضل النتائج لعملائه."}</p>
 
               <h4 className="text-[#1A1A2E] font-black text-lg mb-4 flex items-center gap-3">
                  <div className="w-2 h-6 bg-amber-400 rounded-full" />
@@ -201,15 +202,15 @@ export default function SellerProfile() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100 hover:border-[#0D5D48]/30 transition-colors">
-                  <p className="text-3xl font-black text-[#0D5D48] mb-1">{seller.totalOrders}</p>
+                  <p className="text-3xl font-black text-[#0D5D48] mb-1">{(seller as any).totalOrders}</p>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">إجمالي المبيعات</p>
                 </div>
                 <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100 hover:border-[#0D5D48]/30 transition-colors">
-                  <p className="text-3xl font-black text-[#0D5D48] mb-1">{seller.completedOrders}</p>
+                  <p className="text-3xl font-black text-[#0D5D48] mb-1">{(seller as any).completedOrders ?? 0}</p>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">طلبات مكتملة</p>
                 </div>
                 <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100 hover:border-[#0D5D48]/30 transition-colors">
-                  <p className="text-3xl font-black text-[#C49A2C] mb-1">{seller.rating}</p>
+                  <p className="text-3xl font-black text-[#C49A2C] mb-1">{(seller as any).rating}</p>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">متوسط النجوم</p>
                 </div>
                 <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100 hover:border-[#0D5D48]/30 transition-colors">
@@ -224,13 +225,15 @@ export default function SellerProfile() {
 
       <Footer />
 
-      <ChatDialog 
-        isOpen={isChatOpen}
-        onOpenChange={setIsChatOpen}
-        receiverUnionId={seller.unionId}
-        receiverName={seller.name}
-        receiverAvatar={seller.avatar}
-      />
+      {seller && (
+        <ChatDialog 
+          isOpen={isChatOpen}
+          onOpenChange={setIsChatOpen}
+          receiverUnionId={(seller as any).unionId}
+          receiverName={seller.name}
+          receiverAvatar={seller.avatar}
+        />
+      )}
     </div>
   );
 }

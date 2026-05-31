@@ -1,46 +1,35 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "../middleware";
-import { db } from "../lib/firebase-admin";
+import { 
+  listNotifications, 
+  markNotificationRead, 
+  markAllNotificationsRead,
+  countUnreadNotifications
+} from "../queries/notifications";
 
 export const notificationsRouter = createRouter({
   list: authedQuery.query(async ({ ctx }) => {
-    const list = await db.collection("users")
-      .doc(ctx.user.unionId)
-      .collection("notifications")
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
+    const userId = (ctx.user as any).unionId || String(ctx.user.id);
+    return await listNotifications(userId);
+  }),
 
-    return list.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+  unreadCount: authedQuery.query(async ({ ctx }) => {
+    const userId = (ctx.user as any).unionId || String(ctx.user.id);
+    const count = await countUnreadNotifications(userId);
+    return { count };
   }),
 
   markRead: authedQuery
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      await db.collection("users")
-        .doc(ctx.user.unionId)
-        .collection("notifications")
-        .doc(input.id)
-        .update({ isRead: true });
+      const userId = (ctx.user as any).unionId || String(ctx.user.id);
+      await markNotificationRead(userId, input.id);
       return { success: true };
     }),
 
   markAllRead: authedQuery.mutation(async ({ ctx }) => {
-    const batch = db.batch();
-    const unread = await db.collection("users")
-      .doc(ctx.user.unionId)
-      .collection("notifications")
-      .where("isRead", "==", false)
-      .get();
-
-    unread.docs.forEach(doc => {
-      batch.update(doc.ref, { isRead: true });
-    });
-
-    await batch.commit();
+    const userId = (ctx.user as any).unionId || String(ctx.user.id);
+    await markAllNotificationsRead(userId);
     return { success: true };
   }),
 });

@@ -19,11 +19,9 @@ app.all("/trpc/*", async (c) => {
       createContext,
     });
   } catch (err: any) {
-    console.error("[TRPC Server Error]:", err.message);
     return c.json({ 
       error: "Internal Server Error", 
-      details: err.message,
-      path: c.req.path 
+      message: "An unexpected error occurred",
     }, 500);
   }
 });

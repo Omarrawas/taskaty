@@ -10,14 +10,16 @@ import {
 
 export const walletRouter = createRouter({
   balance: authedQuery.query(async ({ ctx }) => {
-    const wallet = await ensureWallet(ctx.user.id);
+    const userId = (ctx.user as any).unionId || String(ctx.user.id);
+    const wallet = await ensureWallet(userId);
     return { balance: wallet.balance ?? "0" };
   }),
 
   transactions: authedQuery
     .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
     .query(async ({ input, ctx }) => {
-      return getWalletTransactions(ctx.user.id, input?.limit ?? 30);
+      const userId = (ctx.user as any).unionId || String(ctx.user.id);
+      return getWalletTransactions(userId, input?.limit ?? 30);
     }),
 
   deposit: authedQuery
@@ -30,8 +32,9 @@ export const walletRouter = createRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const userId = (ctx.user as any).unionId || String(ctx.user.id);
       await createDepositRequest(
-        ctx.user.id,
+        userId,
         input.amount,
         input.method,
         input.transactionNumber,
@@ -50,7 +53,8 @@ export const walletRouter = createRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const wallet = await getWalletByUserId(ctx.user.id);
+      const userId = (ctx.user as any).unionId || String(ctx.user.id);
+      const wallet = await getWalletByUserId(userId);
       const balance = parseFloat(wallet?.balance ?? "0");
       const amount = parseFloat(input.amount);
 
@@ -59,7 +63,7 @@ export const walletRouter = createRouter({
       }
 
       await createWithdrawalRequest(
-        ctx.user.id,
+        userId,
         input.amount,
         input.method,
         input.accountNumber,

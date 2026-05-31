@@ -45,6 +45,7 @@ export default function FeaturedServices() {
                   totalReviews={service.totalReviews ?? 0}
                   featured={service.featured ?? false}
                   deliveryTime={service.deliveryTime ?? 3}
+                  categorySlug={service.categorySlug}
                 />
               </div>
             ))}

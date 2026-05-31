@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Star, Search, Users, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Link } from "react-router";

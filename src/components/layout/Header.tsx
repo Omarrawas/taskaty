@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router";
-import { Menu, X, Hexagon, LogOut } from "lucide-react";
+import { Menu, X, Hexagon, LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { trpc } from "@/providers/trpc";
 
 const navLinks = [
   { label: "الرئيسية", href: "/" },
@@ -16,6 +17,12 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  
+  const { data: unreadData } = trpc.notifications.unreadCount.useQuery(undefined, {
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -29,6 +36,14 @@ export default function Header() {
 
   return (
     <>
+      {/* Skip to content link for accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:right-4 focus:z-[100] focus:bg-[#0D5D48] focus:text-white focus:px-4 focus:py-2 focus:rounded-lg"
+      >
+        تخطي إلى المحتوى
+      </a>
+      
       <header
         className={`fixed top-0 right-0 left-0 z-50 transition-all duration-300 ${
           scrolled
@@ -39,7 +54,7 @@ export default function Header() {
       >
         <div className="max-w-[1200px] mx-auto px-4 h-full flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
+          <Link to="/" className="flex items-center gap-2 shrink-0" aria-label="Taskaty - الرئيسية">
             <Hexagon className="w-8 h-8 text-[#0D5D48] fill-[#0D5D48]" />
             <span
               className="text-[#0D5D48] text-2xl font-medium"
@@ -91,6 +106,18 @@ export default function Header() {
                     لوحة الإدارة
                   </Link>
                 )}
+                <Link
+                  to="/dashboard?tab=notifications"
+                  className="relative p-2 text-gray-500 hover:text-[#0D5D48] transition-colors"
+                  title="الإشعارات"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
                 <button
                   onClick={() => logout()}
                   className="p-2 text-gray-500 hover:text-red-500 transition-colors"
@@ -170,6 +197,18 @@ export default function Header() {
                       ⚙️ لوحة الإدارة
                     </Link>
                   )}
+                  <Link
+                    to="/dashboard?tab=notifications"
+                    className="flex items-center gap-2 text-[#1A1A2E] font-medium py-2 px-4 hover:bg-gray-50 rounded-xl transition-colors"
+                  >
+                    <Bell className="w-5 h-5" />
+                    الإشعارات
+                    {unreadCount > 0 && (
+                      <span className="mr-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                   <button
                     onClick={() => logout()}
                     className="flex items-center gap-2 text-red-500 font-medium py-2 px-4 hover:bg-red-50 rounded-xl transition-colors"

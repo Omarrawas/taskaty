@@ -4,7 +4,6 @@ import {
   collection, 
   query, 
   where, 
-  orderBy, 
   onSnapshot, 
   doc,
   addDoc,
@@ -24,18 +23,51 @@ export function useChat(conversationId?: string) {
   useEffect(() => {
     if (!user || !user.unionId) return;
 
+    // Simple query without composite index
     const q = query(
       collection(db, "conversations"),
-      where("participants", "array-contains", user.unionId),
-      orderBy("lastMessageAt", "desc")
+      where("participants", "array-contains", user.unionId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const convs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setConversations(convs);
+      
+      // Fetch other user data for each conversation
+      const convsWithUserData = await Promise.all(
+        convs.map(async (conv: any) => {
+          const otherId = conv.participants?.find((p: string) => p !== user.unionId);
+          if (otherId) {
+            try {
+              const userDoc = await import("firebase/firestore").then(mod => 
+                mod.getDoc(mod.doc(db, "users", otherId))
+              );
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                return {
+                  ...conv,
+                  otherName: userData.name,
+                  otherAvatar: userData.avatar,
+                  otherId: otherId,
+                };
+              }
+            } catch (err) {
+              // silently ignore
+            }
+          }
+          return conv;
+        })
+      );
+      
+      // Sort in JavaScript to avoid composite index
+      convsWithUserData.sort((a: any, b: any) => {
+        const dateA = a.lastMessageAt?.toDate?.() || new Date(0);
+        const dateB = b.lastMessageAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      setConversations(convsWithUserData);
       setLoading(false);
     });
 
@@ -46,9 +78,9 @@ export function useChat(conversationId?: string) {
   useEffect(() => {
     if (!conversationId) return;
 
+    // Simple query without composite index
     const q = query(
-      collection(db, "conversations", conversationId, "messages"),
-      orderBy("createdAt", "asc")
+      collection(db, "conversations", conversationId, "messages")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -56,6 +88,12 @@ export function useChat(conversationId?: string) {
         id: doc.id,
         ...doc.data()
       }));
+      // Sort in JavaScript
+      msgs.sort((a: any, b: any) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateA.getTime() - dateB.getTime();
+      });
       setMessages(msgs);
     });
 
@@ -69,11 +107,14 @@ export function useChat(conversationId?: string) {
     const convId = participants.join("_");
     const convRef = doc(db, "conversations", convId);
 
-    // Ensure conversation exists
+    // Ensure conversation exists with buyerId and sellerId
     await setDoc(convRef, {
       participants,
+      buyerId: participants[0],
+      sellerId: participants[1],
       lastMessage: content,
       lastMessageAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
     }, { merge: true });
 
     // Add message
@@ -87,6 +128,22 @@ export function useChat(conversationId?: string) {
       lastMessage: content,
       lastMessageAt: serverTimestamp(),
     });
+
+    // Send notification to receiver
+    try {
+      const notificationRef = collection(db, "users", receiverUnionId, "notifications");
+      await addDoc(notificationRef, {
+        title: "رسالة جديدة",
+        message: `رسالة جديدة من ${user.name || "مستخدم"}`,
+        type: "message",
+        referenceId: convId,
+        referenceType: "conversation",
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      // notification failed silently
+    }
   };
 
   return {

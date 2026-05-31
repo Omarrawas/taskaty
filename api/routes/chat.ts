@@ -1,34 +1,22 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "../middleware";
-import { db } from "../lib/firebase-admin";
+import { 
+  listConversations, 
+  listMessages, 
+  createMessage, 
+  findOrCreateConversation 
+} from "../queries/chat";
 
 export const chatRouter = createRouter({
   conversations: authedQuery.query(async ({ ctx }) => {
-    const list = await db.collection("conversations")
-      .where("participants", "array-contains", ctx.user.unionId)
-      .orderBy("lastMessageAt", "desc")
-      .get();
-
-    return list.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const userId = (ctx.user as any).unionId || String(ctx.user.id);
+    return await listConversations(userId);
   }),
 
   messages: authedQuery
     .input(z.object({ conversationId: z.string() }))
     .query(async ({ input }) => {
-      const msgs = await db.collection("conversations")
-        .doc(input.conversationId)
-        .collection("messages")
-        .orderBy("createdAt", "desc")
-        .limit(50)
-        .get();
-
-      return msgs.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      return await listMessages(input.conversationId);
     }),
 
   send: authedQuery
@@ -39,33 +27,18 @@ export const chatRouter = createRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const participants = [ctx.user.unionId, input.receiverUnionId].sort();
-      const convId = participants.join("_");
+      const senderId = (ctx.user as any).unionId || String(ctx.user.id);
+      const conv = await findOrCreateConversation(senderId, input.receiverUnionId);
       
-      const convRef = db.collection("conversations").doc(convId);
-      const convDoc = await convRef.get();
-
-      if (!convDoc.exists) {
-        await convRef.set({
-          participants,
-          createdAt: new Date(),
-          lastMessage: input.content,
-          lastMessageAt: new Date(),
-        });
-      } else {
-        await convRef.update({
-          lastMessage: input.content,
-          lastMessageAt: new Date(),
-        });
-      }
-
-      await convRef.collection("messages").add({
-        senderId: ctx.user.unionId,
+      if (!conv) throw new Error("فشل في بدء المحادثة");
+      
+      await createMessage({
+        conversationId: conv.id,
+        senderId,
         content: input.content,
-        createdAt: new Date(),
       });
 
-      return { success: true, conversationId: convId };
+      return { success: true, conversationId: conv.id };
     }),
 });
 

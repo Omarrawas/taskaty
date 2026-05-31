@@ -8,7 +8,8 @@ import {
   rejectService,
   listAllOrders,
   listWithdrawalRequests,
-  promoteToAdmin,
+  updateUserRole,
+  deleteUser,
 } from "../queries/admin";
 import {
   listPaymentProofs,
@@ -31,13 +32,13 @@ export const adminRouter = createRouter({
   }),
 
   approveService: adminQuery
-    .input(z.object({ id: z.number().int() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       return approveService(input.id);
     }),
 
   rejectService: adminQuery
-    .input(z.object({ id: z.number().int() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       return rejectService(input.id);
     }),
@@ -55,14 +56,14 @@ export const adminRouter = createRouter({
   }),
 
   approveDeposit: adminQuery
-    .input(z.object({ id: z.number().int(), userId: z.number().int(), amount: z.string() }))
+    .input(z.object({ id: z.string(), userId: z.string(), amount: z.string() }))
     .mutation(async ({ input }) => {
       return approvePaymentProof(input.id, input.userId, input.amount);
     }),
 
   updateWithdrawal: adminQuery
     .input(z.object({ 
-      id: z.number().int(), 
+      id: z.string(), 
       status: z.enum(["approved", "rejected"]),
       adminNote: z.string().optional()
     }))
@@ -71,14 +72,20 @@ export const adminRouter = createRouter({
     }),
 
   adjustBalance: adminQuery
-    .input(z.object({ userId: z.number().int(), amount: z.string(), description: z.string() }))
+    .input(z.object({ userId: z.string(), amount: z.string(), description: z.string() }))
     .mutation(async ({ input }) => {
       return adjustUserBalance(input.userId, input.amount, input.description);
     }),
 
-  promoteToAdmin: adminQuery
-    .input(z.object({ userId: z.number().int() }))
+  updateRole: adminQuery
+    .input(z.object({ userId: z.string(), role: z.string() }))
     .mutation(async ({ input }) => {
-      return promoteToAdmin(input.userId);
+      return updateUserRole(input.userId, input.role);
+    }),
+
+  deleteUser: adminQuery
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ input }) => {
+      return deleteUser(input.userId);
     }),
 });

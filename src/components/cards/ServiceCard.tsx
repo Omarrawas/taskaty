@@ -1,11 +1,14 @@
 import { Link } from "react-router";
-import { Star } from "lucide-react";
+import { Star, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { sellers } from "@/lib/mockData";
+import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
+import { getServiceImage } from "@/lib/storage";
 
 interface ServiceCardProps {
-  id?: number;
-  sellerId: number;
+  id?: string | number;
+  sellerId: string | number;
   title: string;
   slug: string;
   price: string;
@@ -14,10 +17,11 @@ interface ServiceCardProps {
   totalReviews: number;
   featured?: boolean;
   deliveryTime?: number;
+  categorySlug?: string;
 }
 
 export default function ServiceCard({
-  id: _id,
+  id,
   sellerId,
   title,
   slug,
@@ -27,10 +31,36 @@ export default function ServiceCard({
   totalReviews,
   featured,
   deliveryTime: _deliveryTime,
+  categorySlug,
 }: ServiceCardProps) {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
   const seller = sellers.find((s) => s.id === sellerId);
-  const image = images?.[0] || "/images/service-1.jpg";
+  const image = getServiceImage(images, categorySlug);
   const priceNum = parseFloat(price);
+
+  const { data: favoriteData } = trpc.favorites.isFavorited.useQuery(
+    { serviceId: String(id) },
+    { enabled: !!user && !!id }
+  );
+  const isFavorited = favoriteData?.favorited ?? false;
+
+  const toggleFavorite = trpc.favorites.toggle.useMutation({
+    onSuccess: async () => {
+      await utils.favorites.isFavorited.invalidate({ serviceId: String(id) });
+      await utils.favorites.list.invalidate();
+      await utils.favorites.count.invalidate();
+    },
+  });
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+    if (id) {
+      toggleFavorite.mutate({ serviceId: String(id) });
+    }
+  };
 
   return (
     <Link to={`/services/${slug}`} className="group block">
@@ -47,6 +77,20 @@ export default function ServiceCard({
             <Badge className="absolute top-3 left-3 bg-[#C49A2C] text-white border-0 rounded-full px-3 py-1 text-xs font-semibold">
               مميز
             </Badge>
+          )}
+          {/* Favorite Button */}
+          {user && (
+            <button
+              onClick={handleToggleFavorite}
+              disabled={toggleFavorite.isPending}
+              className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                isFavorited
+                  ? "bg-red-500 text-white"
+                  : "bg-white/90 text-gray-400 hover:text-red-500 hover:bg-white"
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
+            </button>
           )}
         </div>
 

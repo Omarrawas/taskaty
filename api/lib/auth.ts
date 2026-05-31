@@ -23,7 +23,6 @@ export async function authenticateRequest(req: Request): Promise<AuthedUser | nu
 
   try {
     if (!adminAuth) {
-      console.error("[Auth] Firebase Admin not initialized");
       return null;
     }
 
@@ -32,7 +31,6 @@ export async function authenticateRequest(req: Request): Promise<AuthedUser | nu
     const isAdmin = email && ADMIN_EMAILS.includes(email);
 
     // Sync with DB to get/create numeric ID
-    console.log("[Auth] Syncing user with DB. UID:", decodedToken.uid);
     const { upsertUser } = await import("../queries/users");
     const dbUser = await upsertUser({
       unionId: decodedToken.uid,
@@ -41,25 +39,22 @@ export async function authenticateRequest(req: Request): Promise<AuthedUser | nu
       avatar: decodedToken.picture,
       // Only set role=admin for admin emails on insert; don't overwrite seller roles
       role: isAdmin ? "admin" : "buyer",
-    }, isAdmin);
-    console.log("[Auth] DB Sync completed. DB ID:", dbUser?.id);
+    }, !!isAdmin);
 
     if (!dbUser) {
-       console.error("[Auth] DB Sync failed for UID:", decodedToken.uid);
        return null;
     }
 
     return {
-      id: dbUser.id as any, // Numeric ID from DB
-      unionId: dbUser.unionId,
-      email: dbUser.email ?? undefined,
-      name: dbUser.name ?? undefined,
-      avatar: dbUser.avatar ?? undefined,
-      role: dbUser.role as any,
+      id: (dbUser as any).id as any, // Numeric ID from DB
+      unionId: (dbUser as any).unionId,
+      email: (dbUser as any).email ?? undefined,
+      name: (dbUser as any).name ?? undefined,
+      avatar: (dbUser as any).avatar ?? undefined,
+      role: (dbUser as any).role as any,
     };
 
   } catch (error: any) {
-    console.error("[Auth] Token verification failed:", error.message);
     return null;
   }
 }

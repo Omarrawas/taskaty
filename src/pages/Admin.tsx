@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Wallet, AlertTriangle,
-  CheckCircle, ChevronLeft, Check, X, RefreshCcw
+  CheckCircle, ChevronLeft, Check, X, RefreshCcw, Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,13 +25,17 @@ const sidebarItems = [
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const utils = trpc.useUtils();
 
-  // Modal states for balance adjustment
+  // Modal states
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
 
   // Queries
   const { data: stats } = trpc.admin.stats.useQuery(undefined, {
@@ -42,6 +46,7 @@ export default function Admin() {
   const { data: pendingServices } = trpc.admin.services.useQuery(undefined, { enabled: activeTab === "dashboard" || activeTab === "services" });
   const { data: withdrawals } = trpc.admin.withdrawals.useQuery(undefined, { enabled: activeTab === "withdrawals" });
   const { data: deposits } = trpc.admin.deposits.useQuery(undefined, { enabled: activeTab === "deposits" });
+  const { data: disputes } = trpc.disputes.adminList.useQuery(undefined, { enabled: activeTab === "disputes" });
 
   // Mutations
   const approveService = trpc.admin.approveService.useMutation({
@@ -77,10 +82,20 @@ export default function Admin() {
     }
   });
 
-  const promoteToAdmin = trpc.admin.promoteToAdmin.useMutation({
+  const updateRole = trpc.admin.updateRole.useMutation({
     onSuccess: () => {
-      toast.success("تم ترقية المستخدم إلى مدير بنجاح");
+      toast.success("تم تحديث رتبة المستخدم بنجاح");
+      setIsRoleModalOpen(false);
       utils.admin.users.invalidate();
+    }
+  });
+
+  const deleteUser = trpc.admin.deleteUser.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف المستخدم وكافة بياناته بنجاح");
+      setIsDeleteModalOpen(false);
+      utils.admin.users.invalidate();
+      utils.admin.stats.invalidate();
     }
   });
 
@@ -92,19 +107,96 @@ export default function Admin() {
     }
   });
 
+  const resolveDispute = trpc.disputes.adminResolve.useMutation({
+    onSuccess: async () => {
+      toast.success("تم حل النزاع بنجاح");
+      await utils.disputes.adminList.invalidate();
+      await utils.admin.stats.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "فشل في حل النزاع");
+    },
+  });
+
   const dashboardStats = [
     { label: "إجمالي المبيعات", value: stats?.totalSales ?? 0, icon: ShoppingCart, color: "bg-blue-50 text-blue-600", isCurrency: true },
     { label: "رصيد المستخدمين", value: stats?.totalWalletBalance ?? 0, icon: Wallet, color: "bg-[#E8F5F0] text-[#0D5D48]", isCurrency: true },
     { label: "طلبات الشحن المعلقة", value: stats?.pendingDepositsCount ?? 0, icon: CheckCircle, color: "bg-amber-50 text-amber-600" },
+    { label: "النزاعات المفتوحة", value: stats?.disputes ?? 0, icon: AlertTriangle, color: "bg-red-50 text-red-600" },
     { label: "إجمالي المستخدمين", value: stats?.users ?? 0, icon: Users, color: "bg-purple-50 text-purple-600" },
     { label: "إجمالي الطلبات", value: stats?.orders ?? 0, icon: ShoppingCart, color: "bg-indigo-50 text-indigo-600" },
-    { label: "الخدمات المنشورة", value: stats?.services ?? 0, icon: Package, color: "bg-orange-50 text-orange-600" },
   ];
+
+  const mobileNavItems = sidebarItems.slice(0, 5);
 
   return (
     <div className="min-h-screen bg-[#FAFBF7]">
       <Header />
-      <div className="pt-[72px] flex">
+      
+      {/* Mobile Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E5DF] z-40 px-2 py-2">
+        <div className="flex items-center justify-around">
+          {mobileNavItems.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => setActiveTab(item.value)}
+              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-colors ${
+                activeTab === item.value
+                  ? "text-[#0D5D48]"
+                  : "text-gray-500"
+              }`}
+            >
+              <item.icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center gap-1 p-2 rounded-xl text-gray-500"
+          >
+            <Menu className="w-5 h-5" />
+            <span className="text-[10px] font-medium">المزيد</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Menu Drawer */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setMobileMenuOpen(false)}>
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[70vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white p-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-[#1A1A2E]">لوحة الإدارة</h3>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              {sidebarItems.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => {
+                    setActiveTab(item.value);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    activeTab === item.value
+                      ? "bg-[#0D5D48] text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="pt-[72px] flex pb-20 md:pb-0">
         {/* Sidebar */}
         <aside className="w-64 bg-white border-l border-[#E5E5DF] h-[calc(100vh-72px)] sticky top-[72px] hidden md:block">
           <div className="p-6">
@@ -114,14 +206,18 @@ export default function Admin() {
                 <button
                   key={item.value}
                   onClick={() => setActiveTab(item.value)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
-                    activeTab === item.value
-                      ? "bg-[#0D5D48] text-white shadow-lg shadow-[#0D5D48]/20"
-                      : "text-gray-500 hover:bg-gray-50"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === item.value
+                    ? "bg-[#0D5D48] text-white shadow-lg shadow-[#0D5D48]/20"
+                    : "text-gray-500 hover:bg-gray-50"
+                    }`}
                 >
                   <item.icon className="w-5 h-5" />
                   {item.label}
+                  {item.value === "disputes" && (stats?.disputes ?? 0) > 0 && (
+                    <span className="mr-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {stats?.disputes}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -160,8 +256,8 @@ export default function Admin() {
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold text-[#1A1A2E]">طلبات شحن وتوثيق معلقة</h3>
                     <div className="flex gap-2">
-                       <Badge variant="secondary" className="bg-amber-50 text-amber-600 border-0">{stats?.pendingDepositsCount ?? 0} إيداع</Badge>
-                       <Badge variant="secondary" className="bg-red-50 text-red-600 border-0">{pendingServices?.length ?? 0} خدمة</Badge>
+                      <Badge variant="secondary" className="bg-amber-50 text-amber-600 border-0">{stats?.pendingDepositsCount ?? 0} إيداع</Badge>
+                      <Badge variant="secondary" className="bg-red-50 text-red-600 border-0">{pendingServices?.length ?? 0} خدمة</Badge>
                     </div>
                   </div>
                   <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
@@ -203,9 +299,14 @@ export default function Admin() {
                       <Wallet className="w-6 h-6 mx-auto mb-2" />
                       <span className="text-xs font-bold">طلبات السحب</span>
                     </button>
-                    <button onClick={() => setActiveTab("disputes")} className="p-4 bg-red-50 text-red-600 rounded-2xl text-center hover:bg-red-100 transition-colors">
+                    <button onClick={() => setActiveTab("disputes")} className="p-4 bg-red-50 text-red-600 rounded-2xl text-center hover:bg-red-100 transition-colors relative">
                       <AlertTriangle className="w-6 h-6 mx-auto mb-2" />
                       <span className="text-xs font-bold">النزاعات</span>
+                      {(stats?.disputes ?? 0) > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {stats?.disputes}
+                        </span>
+                      )}
                     </button>
                     <button onClick={() => setActiveTab("orders")} className="p-4 bg-[#E8F5F0] text-[#0D5D48] rounded-2xl text-center hover:bg-[#D4EBE1] transition-colors">
                       <ShoppingCart className="w-6 h-6 mx-auto mb-2" />
@@ -247,7 +348,7 @@ export default function Admin() {
                         <TableBody>
                           {users?.filter((u: any) => {
                             if (type === "sellers") return u.role === "seller";
-                            if (type === "buyers") return u.role === "user";
+                            if (type === "buyers") return u.role === "buyer";
                             return true;
                           }).map((u: any) => (
                             <TableRow key={u.id} className="hover:bg-gray-50/50">
@@ -264,20 +365,29 @@ export default function Admin() {
                               <TableCell><Badge className={`${u.status === "active" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"} border-0 text-[10px]`}>{u.status}</Badge></TableCell>
                               <TableCell className="text-xs text-gray-500">{new Date(u.createdAt || "").toLocaleDateString("ar-SY")}</TableCell>
                               <TableCell>
-                                <div className="flex gap-2">
-                                  <Button 
-                                    onClick={() => {
-                                      setSelectedUser(u);
-                                      setIsBalanceModalOpen(true);
-                                    }}
-                                    size="sm" variant="outline" className="rounded-xl h-8 text-xs border-[#0D5D48] text-[#0D5D48]">تعديل الرصيد</Button>
-                                  {u.role !== "admin" && (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      onClick={() => {
+                                        setSelectedUser(u);
+                                        setIsBalanceModalOpen(true);
+                                      }}
+                                      size="sm" variant="outline" className="rounded-xl h-8 text-[10px] border-[#0D5D48] text-[#0D5D48] hover:bg-[#0D5D48]/5">تعديل الرصيد</Button>
+                                    
+                                    <Button
+                                      onClick={() => {
+                                        setSelectedUser(u);
+                                        setSelectedRole(u.role);
+                                        setIsRoleModalOpen(true);
+                                      }}
+                                      size="sm" variant="outline" className="rounded-xl h-8 text-[10px] border-amber-500 text-amber-600 hover:bg-amber-50">تغيير الرتبة</Button>
+                                    
                                     <Button 
-                                      onClick={() => promoteToAdmin.mutate({ userId: u.id })}
-                                      size="sm" variant="outline" className="rounded-xl h-8 text-xs border-amber-500 text-amber-600 hover:bg-amber-50">ترقية لمدير</Button>
-                                  )}
-                                  <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs">إدارة</Button>
-                                </div>
+                                      onClick={() => {
+                                        setSelectedUser(u);
+                                        setIsDeleteModalOpen(true);
+                                      }}
+                                      size="sm" variant="outline" className="rounded-xl h-8 text-[10px] border-red-500 text-red-600 hover:bg-red-50">حذف</Button>
+                                  </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -290,45 +400,128 @@ export default function Admin() {
 
               {/* Balance Adjustment Modal */}
               {isBalanceModalOpen && selectedUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                  <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                  <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
                     <h3 className="text-xl font-black text-[#1A1A2E] mb-6">تعديل رصيد: {selectedUser.name}</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">المبلغ (سالب للخصم، موجب للإضافة)</label>
-                        <input 
-                          type="number" 
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block px-1">المبلغ (سالب للخصم، موجب للإضافة)</label>
+                        <input
+                          type="number"
                           value={balanceAmount}
                           onChange={(e) => setBalanceAmount(e.target.value)}
                           placeholder="مثال: 5000 أو -2000"
-                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-[#0D5D48] outline-none"
+                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-[#0D5D48] outline-none transition-all"
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">سبب التعديل (ملاحظة)</label>
-                        <input 
-                          type="text" 
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block px-1">سبب التعديل (ملاحظة)</label>
+                        <input
+                          type="text"
                           value={adjustNote}
                           onChange={(e) => setAdjustNote(e.target.value)}
-                          placeholder="شحن يدوي عبر الشام كاش"
-                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm focus:ring-2 focus:ring-[#0D5D48] outline-none"
+                          placeholder="مثال: تعويض عن طلب ملغى"
+                          className="w-full h-12 bg-gray-50 border-gray-200 rounded-xl px-4 text-sm focus:ring-2 focus:ring-[#0D5D48] outline-none transition-all"
                         />
                       </div>
                     </div>
                     <div className="flex gap-3 mt-8">
-                      <Button 
+                      <Button
                         disabled={adjustBalance.isPending}
                         onClick={() => adjustBalance.mutate({ userId: selectedUser.id, amount: balanceAmount, description: adjustNote })}
-                        className="flex-1 bg-[#0D5D48] rounded-xl h-12 font-bold"
+                        className="flex-1 bg-[#0D5D48] hover:bg-[#0A4A3A] rounded-xl h-12 font-bold shadow-lg shadow-[#0D5D48]/20"
                       >
                         {adjustBalance.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
                       </Button>
-                      <Button 
+                      <Button
                         variant="ghost"
                         onClick={() => setIsBalanceModalOpen(false)}
-                        className="flex-1 h-12 rounded-xl text-gray-400"
+                        className="flex-1 h-12 rounded-xl text-gray-400 font-bold"
                       >
                         إلغاء
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Role Management Modal */}
+              {isRoleModalOpen && selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                  <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-6">
+                      <Users className="w-8 h-8 text-amber-500" />
+                    </div>
+                    <h3 className="text-xl font-black text-[#1A1A2E] mb-2 leading-tight">تغيير رتبة المستخدم</h3>
+                    <p className="text-gray-400 text-xs mb-6 font-medium">أنت الآن تقوم بتغيير صلاحيات <b>{selectedUser.name}</b></p>
+                    
+                    <div className="space-y-2">
+                       {[
+                         { id: "buyer", label: "مشتري (مستخدم عادي)", color: "text-blue-600 bg-blue-50" },
+                         { id: "seller", label: "بائع (مقدم خدمات)", color: "text-green-600 bg-green-50" },
+                         { id: "moderator", label: "مشرف (موديراتور)", color: "text-purple-600 bg-purple-50" },
+                         { id: "admin", label: "مدير (أدمن)", color: "text-red-600 bg-red-50" },
+                       ].map((role) => (
+                         <button
+                           key={role.id}
+                           onClick={() => setSelectedRole(role.id)}
+                           className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                             selectedRole === role.id 
+                              ? "border-[#0D5D48] bg-[#0D5D48]/5 ring-2 ring-[#0D5D48]/10" 
+                              : "border-gray-100 bg-white hover:bg-gray-50"
+                           }`}
+                         >
+                           <span className={`text-xs font-bold ${role.id === selectedRole ? "text-[#0D5D48]" : "text-gray-500"}`}>{role.label}</span>
+                           {selectedRole === role.id && <Check className="w-4 h-4 text-[#0D5D48]" />}
+                         </button>
+                       ))}
+                    </div>
+
+                    <div className="flex gap-3 mt-8">
+                      <Button
+                        disabled={updateRole.isPending}
+                        onClick={() => updateRole.mutate({ userId: selectedUser.id, role: selectedRole })}
+                        className="flex-1 bg-[#0D5D48] hover:bg-[#0A4A3A] rounded-xl h-12 font-bold"
+                      >
+                        {updateRole.isPending ? "جاري التحديث..." : "تطبيق الرتبة"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setIsRoleModalOpen(false)}
+                        className="flex-1 h-12 rounded-xl text-gray-400 font-bold"
+                      >
+                        إلغاء
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* User Deletion Modal */}
+              {isDeleteModalOpen && selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                  <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6">
+                      <AlertTriangle className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h3 className="text-xl font-black text-[#1A1A2E] mb-2 leading-tight">حذف المستخدم نهائياً؟</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed mb-8">
+                       هل أنت متأكد من حذف <b>{selectedUser.name}</b>؟ هذا الإجراء سيقوم بحذف المحفظة والخدمات وكافة البيانات المرتبطة ولن يمكنك التراجع.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <Button
+                        disabled={deleteUser.isPending}
+                        onClick={() => deleteUser.mutate({ userId: selectedUser.id })}
+                        className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 font-bold shadow-lg shadow-red-200"
+                      >
+                        {deleteUser.isPending ? "جاري الحذف..." : "تأكيد الحذف النهائي"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setIsDeleteModalOpen(false)}
+                        className="h-12 rounded-xl text-gray-400 font-bold hover:text-gray-600"
+                      >
+                        إلغاء التراجع
                       </Button>
                     </div>
                   </div>
@@ -429,7 +622,7 @@ export default function Admin() {
                       <TableHead className="text-right">المستخدم</TableHead>
                       <TableHead className="text-right">المبلغ</TableHead>
                       <TableHead className="text-right">الوسيلة</TableHead>
-                      <TableHead className="text-right">الالرقم المرجعي</TableHead>
+                      <TableHead className="text-right">الرقم المرجعي</TableHead>
                       <TableHead className="text-right">إجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -442,9 +635,9 @@ export default function Admin() {
                         <TableCell className="text-xs font-mono">{d.transactionNumber}</TableCell>
                         <TableCell>
                           {d.status === "pending" ? (
-                            <Button 
-                              size="sm" 
-                              className="bg-[#0D5D48] h-8 text-[10px]" 
+                            <Button
+                              size="sm"
+                              className="bg-[#0D5D48] h-8 text-[10px]"
                               onClick={() => approveDeposit.mutate({ id: d.id, userId: d.userId, amount: d.amount })}
                             >
                               تأكيد الشحن
@@ -462,10 +655,98 @@ export default function Admin() {
           )}
 
           {activeTab === "disputes" && (
-            <div className="text-center py-32 animate-in zoom-in-95 duration-500">
-              <AlertTriangle className="w-20 h-20 text-gray-200 mx-auto mb-6" />
-              <h3 className="text-2xl font-black text-[#1A1A2E]">النزاعات</h3>
-              <p className="text-gray-400 mt-2 max-w-sm mx-auto">كل شيء يسير بسلاسة! لا توجد شكاوى أو نزاعات بين المستخدمين حالياً.</p>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-6">إدارة النزاعات</h2>
+              <div className="bg-white rounded-2xl shadow-xl border border-[#E5E5DF]/50 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="text-right">رقم الطلب</TableHead>
+                      <TableHead className="text-right">الخدمة</TableHead>
+                      <TableHead className="text-right">فاتح النزاع</TableHead>
+                      <TableHead className="text-right">السبب</TableHead>
+                      <TableHead className="text-right">المبلغ</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">إجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {disputes && disputes.length > 0 ? disputes.map((d: any) => (
+                      <TableRow key={d.id} className="hover:bg-gray-50/50">
+                        <TableCell>
+                          <div>
+                            <p className="font-bold text-sm">{d.orderNumber}</p>
+                            <p className="text-[10px] text-gray-400">{new Date(d.createdAt).toLocaleDateString("ar-SY")}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm font-medium line-clamp-1">{d.serviceTitle}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm font-bold">{d.openedByName}</p>
+                            <p className="text-[10px] text-gray-400">{d.openedBy === d.buyerId ? "مشتري" : "بائع"}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{d.reason}</TableCell>
+                        <TableCell className="text-sm font-black text-[#0D5D48]">
+                          {Number(d.escrowAmount || 0).toLocaleString()} ل.س
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={
+                            d.status === "open"
+                              ? "bg-red-50 text-red-600 border-0"
+                              : "bg-green-50 text-green-600 border-0"
+                          }>
+                            {d.status === "open" ? "مفتوح" : "محلول"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {d.status === "open" ? (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 rounded-lg h-8 px-3 text-[10px]"
+                                onClick={() => resolveDispute.mutate({ id: d.id, decision: "buyer_favor" })}
+                                disabled={resolveDispute.isPending}
+                              >
+                                لصالح المشتري
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 rounded-lg h-8 px-3 text-[10px]"
+                                onClick={() => resolveDispute.mutate({ id: d.id, decision: "seller_favor" })}
+                                disabled={resolveDispute.isPending}
+                              >
+                                لصالح البائع
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-lg h-8 px-3 text-[10px] text-gray-500"
+                                onClick={() => resolveDispute.mutate({ id: d.id, decision: "cancelled" })}
+                                disabled={resolveDispute.isPending}
+                              >
+                                إلغاء
+                              </Button>
+                            </div>
+                          ) : (
+                            <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px]">
+                              {d.decision === "buyer_favor" ? "لصالح المشتري" : d.decision === "seller_favor" ? "لصالح البائع" : "ملغى"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-16">
+                          <AlertTriangle className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                          <h3 className="text-xl font-bold text-[#1A1A2E] mb-2">لا توجد نزاعات</h3>
+                          <p className="text-gray-400 text-sm">كل شيء يسير بسلاسة! لا توجد شكاوى أو نزاعات.</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </main>

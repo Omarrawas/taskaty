@@ -13,7 +13,6 @@ export default async function handler(req) {
       createContext,
     });
   } catch (error) {
-    console.error("API handler error:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

@@ -1,165 +1,151 @@
-import { desc, count, sql, eq } from "drizzle-orm";
-import { getDb } from "./connection";
-import * as schema from "../../db/schema"; // Corrected import path
+import { db } from "../lib/firebase-admin";
+import { COLLECTIONS } from "../lib/firestore-utils";
 
 export async function getAdminStats() {
-  const db = getDb();
+  if (!db) return null;
 
-  const [usersCount] = await db.select({ total: count() }).from(schema.users);
-  const [servicesCount] = await db.select({ total: count() }).from(schema.services);
-  const [ordersCount] = await db.select({ total: count() }).from(schema.orders);
-  const [disputesCount] = await db
-    .select({ total: count() })
-    .from(schema.disputes)
-    .where(eq(schema.disputes.status, "open"));
+  const usersCount = await db.collection(COLLECTIONS.USERS).count().get();
+  const servicesCount = await db.collection(COLLECTIONS.SERVICES).count().get();
+  const ordersCount = await db.collection(COLLECTIONS.ORDERS).count().get();
+  const disputesCount = await db.collection(COLLECTIONS.DISPUTES).where("status", "==", "open").count().get();
 
-  const [completionRow] = await db
-    .select({
-      completed: sql<number>`sum(case when status = 'completed' then 1 else 0 end)`,
-      total: count(),
-    })
-    .from(schema.orders);
+  const completedOrders = await db.collection(COLLECTIONS.ORDERS).where("status", "==", "completed").count().get();
+  const totalOrders = ordersCount.data().count;
+  const completionRate = totalOrders > 0 ? Math.round((completedOrders.data().count / totalOrders) * 100) : 0;
 
-  const completionRate =
-    completionRow?.total > 0
-      ? Math.round(((completionRow?.completed ?? 0) / (completionRow.total ?? 1)) * 100)
-      : 0;
+  // Calculate wallet balance sum manually (balance is stored as string)
+  const walletsSnapshot = await db.collection(COLLECTIONS.WALLETS).get();
+  let totalWalletBalance = 0;
+  walletsSnapshot.docs.forEach(doc => {
+    const balance = parseFloat(doc.data().balance || "0");
+    totalWalletBalance += balance;
+  });
 
-  const [walletRow] = await db
-    .select({
-      total: sql<number>`sum(cast(balance as decimal(10,2)))`,
-    })
-    .from(schema.wallets);
+  // Calculate deposits sum manually (amount is stored as string)
+  const depositsSnapshot = await db.collection(COLLECTIONS.PAYMENT_PROOFS)
+    .where("status", "==", "approved")
+    .get();
+  let totalDeposited = 0;
+  depositsSnapshot.docs.forEach(doc => {
+    const amount = parseFloat(doc.data().amount || "0");
+    totalDeposited += amount;
+  });
 
-  const [depositsRow] = await db
-    .select({
-      total: sql<number>`sum(cast(amount as decimal(10,2)))`,
-    })
-    .from(schema.paymentProofs)
-    .where(eq(schema.paymentProofs.status, "approved"));
+  // Calculate withdrawals sum manually (amount is stored as string)
+  const withdrawalsSnapshot = await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS)
+    .where("status", "==", "approved")
+    .get();
+  let totalWithdrawn = 0;
+  withdrawalsSnapshot.docs.forEach(doc => {
+    const amount = parseFloat(doc.data().amount || "0");
+    totalWithdrawn += amount;
+  });
 
-  const [withdrawalsRow] = await db
-    .select({
-      total: sql<number>`sum(cast(amount as decimal(10,2)))`,
-    })
-    .from(schema.withdrawalRequests)
-    .where(eq(schema.withdrawalRequests.status, "approved"));
+  // Calculate sales sum manually (totalAmount is stored as string)
+  const salesSnapshot = await db.collection(COLLECTIONS.ORDERS)
+    .where("status", "==", "completed")
+    .get();
+  let totalSales = 0;
+  salesSnapshot.docs.forEach(doc => {
+    const amount = parseFloat(doc.data().totalAmount || "0");
+    totalSales += amount;
+  });
 
-  const [salesRow] = await db
-    .select({
-      total: sql<number>`sum(cast(total_amount as decimal(10,2)))`,
-    })
-    .from(schema.orders)
-    .where(eq(schema.orders.status, "completed"));
-
-  const [pendingDeposits] = await db
-     .select({ count: count() })
-     .from(schema.paymentProofs)
-     .where(eq(schema.paymentProofs.status, "pending"));
+  const pendingDeposits = await db.collection(COLLECTIONS.PAYMENT_PROOFS).where("status", "==", "pending").count().get();
 
   return {
-    users: usersCount?.total ?? 0,
-    services: servicesCount?.total ?? 0,
-    orders: ordersCount?.total ?? 0,
-    disputes: disputesCount?.total ?? 0,
+    users: usersCount.data().count,
+    services: servicesCount.data().count,
+    orders: totalOrders,
+    disputes: disputesCount.data().count,
     completionRate,
-    totalWalletBalance: walletRow?.total ?? 0,
-    totalDeposited: depositsRow?.total ?? 0,
-    totalWithdrawn: withdrawalsRow?.total ?? 0,
-    totalSales: salesRow?.total ?? 0,
-    pendingDepositsCount: pendingDeposits?.count ?? 0,
+    totalWalletBalance: totalWalletBalance,
+    totalDeposited: totalDeposited,
+    totalWithdrawn: totalWithdrawn,
+    totalSales: totalSales,
+    pendingDepositsCount: pendingDeposits.data().count,
   };
 }
 
 export async function listUsers(limit = 50) {
-  return getDb()
-    .select({
-      id: schema.users.id,
-      name: schema.users.name,
-      email: schema.users.email,
-      avatar: schema.users.avatar,
-      role: schema.users.role,
-      status: schema.users.status,
-      createdAt: schema.users.createdAt,
-      lastSignInAt: schema.users.lastSignInAt,
-    })
-    .from(schema.users)
-    .orderBy(desc(schema.users.createdAt))
-    .limit(limit);
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.USERS)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+    
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function listPendingServices() {
-  return getDb()
-    .select({
-      id: schema.services.id,
-      title: schema.services.title,
-      price: schema.services.price,
-      status: schema.services.status,
-      createdAt: schema.services.createdAt,
-      sellerName: schema.users.name,
-      categoryName: schema.categories.nameAr,
-    })
-    .from(schema.services)
-    .innerJoin(schema.users, eq(schema.users.id, schema.services.sellerId))
-    .innerJoin(schema.categories, eq(schema.categories.id, schema.services.categoryId))
-    .where(eq(schema.services.status, "pending"))
-    .orderBy(desc(schema.services.createdAt));
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.SERVICES)
+    .where("status", "==", "pending")
+    .get();
+    
+  // Sort in JavaScript to avoid composite index requirement
+  const services = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  services.sort((a: any, b: any) => {
+    const dateA = new Date(a.createdAt || 0).getTime();
+    const dateB = new Date(b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+  
+  return services;
 }
 
-export async function approveService(id: number) {
-  await getDb()
-    .update(schema.services)
-    .set({ status: "active" })
-    .where(eq(schema.services.id, id));
+export async function approveService(id: string) {
+  if (!db) return;
+  await db.collection(COLLECTIONS.SERVICES).doc(id).update({ status: "active" });
 }
 
-export async function rejectService(id: number) {
-  await getDb()
-    .update(schema.services)
-    .set({ status: "rejected" })
-    .where(eq(schema.services.id, id));
+export async function rejectService(id: string) {
+  if (!db) return;
+  await db.collection(COLLECTIONS.SERVICES).doc(id).update({ status: "rejected" });
 }
 
 export async function listAllOrders(limit = 50) {
-  return getDb()
-    .select({
-      id: schema.orders.id,
-      orderNumber: schema.orders.orderNumber,
-      totalAmount: schema.orders.totalAmount,
-      status: schema.orders.status,
-      createdAt: schema.orders.createdAt,
-      serviceTitle: schema.services.title,
-      buyerName: schema.users.name,
-    })
-    .from(schema.orders)
-    .innerJoin(schema.services, eq(schema.services.id, schema.orders.serviceId))
-    .innerJoin(schema.users, eq(schema.users.id, schema.orders.buyerId))
-    .orderBy(desc(schema.orders.createdAt))
-    .limit(limit);
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.ORDERS)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+    
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function listWithdrawalRequests() {
-  return getDb()
-    .select({
-      id: schema.withdrawalRequests.id,
-      userId: schema.withdrawalRequests.userId,
-      amount: schema.withdrawalRequests.amount,
-      method: schema.withdrawalRequests.method,
-      accountNumber: schema.withdrawalRequests.accountNumber,
-      accountName: schema.withdrawalRequests.accountName,
-      status: schema.withdrawalRequests.status,
-      createdAt: schema.withdrawalRequests.createdAt,
-      userName: schema.users.name,
-      userAvatar: schema.users.avatar,
-    })
-    .from(schema.withdrawalRequests)
-    .innerJoin(schema.users, eq(schema.users.id, schema.withdrawalRequests.userId))
-    .orderBy(desc(schema.withdrawalRequests.createdAt));
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS)
+    .orderBy("createdAt", "desc")
+    .get();
+    
+  const results = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const userDoc = await db!.collection(COLLECTIONS.USERS).doc(data.userId).get();
+    const userData = userDoc.data();
+    return {
+      id: doc.id,
+      ...data,
+      userName: userData?.name,
+      userAvatar: userData?.avatar,
+    };
+  }));
+  
+  return results;
 }
 
-export async function promoteToAdmin(userId: number) {
-  await getDb()
-    .update(schema.users)
-    .set({ role: "admin" })
-    .where(eq(schema.users.id, userId));
+export async function updateUserRole(userId: string, role: string) {
+  if (!db) return;
+  await db.collection(COLLECTIONS.USERS).doc(userId).update({ role });
+}
+
+export async function deleteUser(userId: string) {
+  if (!db) return;
+  // Also delete their wallet and services for cleanup
+  await db.collection(COLLECTIONS.USERS).doc(userId).delete();
+  await db.collection(COLLECTIONS.WALLETS).doc(userId).delete();
+  
+  // Note: deleting services and other related data would be better done in a cloud function or batch,
+  // but for simple "fake user" deletion, this is a start.
 }

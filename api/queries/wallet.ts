@@ -1,165 +1,269 @@
-import { eq, desc } from "drizzle-orm";
-import { getDb } from "./connection";
-import * as schema from "../../db/schema";
+import { db } from "../lib/firebase-admin";
+import { COLLECTIONS } from "../lib/firestore-utils";
+import { createNotification } from "./notifications";
 
-export async function getWalletByUserId(userId: number, tx?: any) {
-  const db = tx || getDb();
-  const rows = await db
-    .select()
-    .from(schema.wallets)
-    .where(eq(schema.wallets.userId, userId))
-    .limit(1);
-  return rows.at(0);
+export async function getWalletByUserId(userId: string, transaction?: any) {
+  if (!db) return null;
+  const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
+  const doc = transaction ? await transaction.get(walletRef) : await walletRef.get();
+  return doc.exists ? doc.data() : null;
 }
 
-export async function ensureWallet(userId: number, tx?: any) {
-  const existing = await getWalletByUserId(userId, tx);
+export async function ensureWallet(userId: string, transaction?: any) {
+  const existing = await getWalletByUserId(userId, transaction);
   if (existing) return existing;
-  const db = tx || getDb();
-  await db.insert(schema.wallets).values({ userId, balance: "0" });
-  return (await getWalletByUserId(userId, tx))!;
+  
+  if (!db) throw new Error("Database not initialized");
+  const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
+  const newWallet = {
+    userId,
+    balance: "0",
+    createdAt: new Date().toISOString(),
+  };
+  
+  if (transaction) {
+    transaction.set(walletRef, newWallet);
+  } else {
+    await walletRef.set(newWallet);
+  }
+  return newWallet;
 }
 
-export async function getWalletTransactions(userId: number, limit = 30) {
-  const wallet = await getWalletByUserId(userId);
-  if (!wallet) return [];
-
-  return getDb()
-    .select()
-    .from(schema.walletTransactions)
-    .where(eq(schema.walletTransactions.walletId, wallet.id))
-    .orderBy(desc(schema.walletTransactions.createdAt))
-    .limit(limit);
+export async function getWalletTransactions(userId: string, limit = 30) {
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.WALLETS).doc(userId)
+    .collection("transactions")
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+    
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function createDepositRequest(
-  userId: number,
+  userId: string,
   amount: string,
-  method: typeof schema.paymentProofs.$inferInsert.method,
+  method: any,
   transactionNumber?: string,
   senderPhone?: string,
 ) {
-  await getDb().insert(schema.paymentProofs).values({
+  if (!db) return;
+  const data: Record<string, any> = {
     userId,
     amount,
     method,
-    transactionNumber,
-    senderPhone,
     status: "pending",
-  });
+    createdAt: new Date().toISOString(),
+  };
+  if (transactionNumber) data.transactionNumber = transactionNumber;
+  if (senderPhone) data.senderPhone = senderPhone;
+  await db.collection(COLLECTIONS.PAYMENT_PROOFS).add(data);
 }
 
 export async function createWithdrawalRequest(
-  userId: number,
+  userId: string,
   amount: string,
-  method: typeof schema.withdrawalRequests.$inferInsert.method,
+  method: any,
   accountNumber?: string,
   accountName?: string,
 ) {
-  await getDb().insert(schema.withdrawalRequests).values({
+  if (!db) return;
+  const data: Record<string, any> = {
     userId,
     amount,
     method,
-    accountNumber,
-    accountName,
     status: "pending",
-  });
+    createdAt: new Date().toISOString(),
+  };
+  if (accountNumber) data.accountNumber = accountNumber;
+  if (accountName) data.accountName = accountName;
+  await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).add(data);
 }
 
 export async function listWithdrawalRequests(status?: string) {
-  const rows = await getDb()
-    .select({
-      id: schema.withdrawalRequests.id,
-      userId: schema.withdrawalRequests.userId,
-      amount: schema.withdrawalRequests.amount,
-      method: schema.withdrawalRequests.method,
-      accountNumber: schema.withdrawalRequests.accountNumber,
-      accountName: schema.withdrawalRequests.accountName,
-      status: schema.withdrawalRequests.status,
-      adminNote: schema.withdrawalRequests.adminNote,
-      createdAt: schema.withdrawalRequests.createdAt,
-      userName: schema.users.name,
-      userAvatar: schema.users.avatar,
-    })
-    .from(schema.withdrawalRequests)
-    .innerJoin(schema.users, eq(schema.users.id, schema.withdrawalRequests.userId))
-    .orderBy(desc(schema.withdrawalRequests.createdAt));
-  return rows;
+  if (!db) return [];
+  let query: any = db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS);
+  if (status) query = query.where("status", "==", status);
+  
+  const snapshot = await query.orderBy("createdAt", "desc").get();
+  
+  const results = await Promise.all(snapshot.docs.map(async (doc: any) => {
+    const data = doc.data();
+    const userDoc = await db!.collection(COLLECTIONS.USERS).doc(data.userId).get();
+    const userData = userDoc.data();
+    return {
+      id: doc.id,
+      ...data,
+      userName: userData?.name,
+      userAvatar: userData?.avatar,
+    };
+  }));
+  
+  return results;
 }
 
 export async function updateWithdrawalRequest(
-  id: number,
+  id: string,
   status: "approved" | "rejected",
   adminNote?: string,
 ) {
-  await getDb()
-    .update(schema.withdrawalRequests)
-    .set({ status, adminNote, processedAt: new Date() })
-    .where(eq(schema.withdrawalRequests.id, id));
+  if (!db) return;
+
+  await db.runTransaction(async (transaction) => {
+    const withdrawalRef = db!.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).doc(id);
+    const withdrawalDoc = await transaction.get(withdrawalRef);
+
+    if (!withdrawalDoc.exists) {
+      throw new Error("طلب السحب غير موجود");
+    }
+
+    const withdrawal = withdrawalDoc.data();
+    if (withdrawal?.status !== "pending") {
+      throw new Error("تمت معالجة طلب السحب مسبقاً");
+    }
+
+    const processedAt = new Date().toISOString();
+
+    if (status === "approved") {
+      const walletRef = db!.collection(COLLECTIONS.WALLETS).doc(withdrawal.userId);
+      const walletDoc = await transaction.get(walletRef);
+      const currentBalance = parseFloat(walletDoc.data()?.balance ?? "0");
+      const amount = parseFloat(withdrawal.amount ?? "0");
+
+      if (currentBalance < amount) {
+        throw new Error("رصيد المستخدم غير كافٍ لاعتماد طلب السحب");
+      }
+
+      const newBalance = (currentBalance - amount).toFixed(2);
+      transaction.set(walletRef, { balance: newBalance }, { merge: true });
+
+      const txRef = walletRef.collection("transactions").doc();
+      transaction.set(txRef, {
+        type: "withdrawal",
+        amount: String(-amount),
+        balanceAfter: newBalance,
+        referenceType: "withdrawal",
+        referenceId: id,
+        description: "سحب رصيد معتمد من الإدارة",
+        status: "completed",
+        createdAt: processedAt,
+      });
+    }
+
+    transaction.update(withdrawalRef, {
+      status,
+      adminNote,
+      processedAt,
+    });
+  });
+
+  // Send notification to user
+  const withdrawalDoc = await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).doc(id).get();
+  const withdrawalData = withdrawalDoc.data();
+  
+  if (withdrawalData) {
+    const amount = parseFloat(withdrawalData.amount ?? "0");
+    await createNotification(withdrawalData.userId, {
+      title: status === "approved" ? "تم اعتماد طلب السحب" : "تم رفض طلب السحب",
+      message: status === "approved" 
+        ? `تم اعتماد طلب السحب بمبلغ ${amount.toLocaleString()} ل.س وسيتم تحويله قريباً`
+        : `تم رفض طلب السحب بمبلغ ${amount.toLocaleString()} ل.س${adminNote ? ` - السبب: ${adminNote}` : ""}`,
+      type: "payment",
+      referenceId: id,
+      referenceType: "withdrawal",
+    });
+  }
 }
 
 export async function listPaymentProofs() {
-  return getDb()
-    .select({
-      id: schema.paymentProofs.id,
-      userId: schema.paymentProofs.userId,
-      amount: schema.paymentProofs.amount,
-      method: schema.paymentProofs.method,
-      transactionNumber: schema.paymentProofs.transactionNumber,
-      senderPhone: schema.paymentProofs.senderPhone,
-      status: schema.paymentProofs.status,
-      adminNote: schema.paymentProofs.adminNote,
-      createdAt: schema.paymentProofs.createdAt,
-      userName: schema.users.name,
-    })
-    .from(schema.paymentProofs)
-    .innerJoin(schema.users, eq(schema.users.id, schema.paymentProofs.userId))
-    .orderBy(desc(schema.paymentProofs.createdAt));
+  if (!db) return [];
+  
+  const snapshot = await db.collection(COLLECTIONS.PAYMENT_PROOFS)
+    .orderBy("createdAt", "desc")
+    .get();
+    
+  const results = await Promise.all(snapshot.docs.map(async (doc: any) => {
+    const data = doc.data();
+    const userDoc = await db!.collection(COLLECTIONS.USERS).doc(data.userId).get();
+    const userData = userDoc.data();
+    return {
+      id: doc.id,
+      ...data,
+      userName: userData?.name,
+    };
+  }));
+  
+  return results;
 }
 
-export async function approvePaymentProof(id: number, userId: number, amount: string) {
-  // Ensure wallet exists
-  const wallet = await ensureWallet(userId);
-
-  const newBalance = (parseFloat(wallet.balance ?? "0") + parseFloat(amount)).toFixed(2);
-
-  await getDb()
-    .update(schema.wallets)
-    .set({ balance: newBalance })
-    .where(eq(schema.wallets.userId, userId));
-
-  await getDb().insert(schema.walletTransactions).values({
-    walletId: wallet.id,
-    type: "deposit",
-    amount,
-    balanceAfter: newBalance,
-    description: "إيداع معتمد من الإدارة",
-    status: "completed",
+export async function approvePaymentProof(id: string, userId: string, amount: string) {
+  if (!db) return;
+  
+  await db.runTransaction(async (transaction) => {
+    const walletRef = db!.collection(COLLECTIONS.WALLETS).doc(userId);
+    const walletDoc = await transaction.get(walletRef);
+    
+    let currentBalance = 0;
+    if (walletDoc.exists) {
+      currentBalance = parseFloat(walletDoc.data()?.balance ?? "0");
+    }
+    
+    const newBalance = (currentBalance + parseFloat(amount)).toFixed(2);
+    
+    transaction.set(walletRef, { balance: newBalance }, { merge: true });
+    
+    const txRef = walletRef.collection("transactions").doc();
+    transaction.set(txRef, {
+      type: "deposit",
+      amount,
+      balanceAfter: newBalance,
+      description: "إيداع معتمد من الإدارة",
+      status: "completed",
+      createdAt: new Date().toISOString(),
+    });
+    
+    const proofRef = db!.collection(COLLECTIONS.PAYMENT_PROOFS).doc(id);
+    transaction.update(proofRef, {
+      status: "approved",
+      reviewedAt: new Date().toISOString(),
+    });
   });
 
-  await getDb()
-    .update(schema.paymentProofs)
-    .set({ status: "approved", reviewedAt: new Date() })
-    .where(eq(schema.paymentProofs.id, id));
+  // Send notification to user
+  await createNotification(userId, {
+    title: "تم شحن رصيدك",
+    message: `تم اعتماد إيداع بمبلغ ${parseFloat(amount).toLocaleString()} ل.س وإضافته لمحفظتك`,
+    type: "payment",
+    referenceId: id,
+    referenceType: "deposit",
+  });
 }
 
-export async function adjustUserBalance(userId: number, amount: string, description: string) {
-  const wallet = await ensureWallet(userId);
-  const currentBalance = parseFloat(wallet.balance ?? "0");
-  const adjustAmount = parseFloat(amount);
-  const newBalance = (currentBalance + adjustAmount).toFixed(2);
-
-  await getDb()
-    .update(schema.wallets)
-    .set({ balance: newBalance })
-    .where(eq(schema.wallets.userId, userId));
-
-  await getDb().insert(schema.walletTransactions).values({
-    walletId: wallet.id,
-    type: adjustAmount >= 0 ? "deposit" : "withdrawal",
-    amount: String(Math.abs(adjustAmount)),
-    balanceAfter: newBalance,
-    description: description || "تعديل رصيد يدوي من الإدارة",
-    status: "completed",
+export async function adjustUserBalance(userId: string, amount: string, description: string) {
+  if (!db) return;
+  
+  await db.runTransaction(async (transaction) => {
+    const walletRef = db!.collection(COLLECTIONS.WALLETS).doc(userId);
+    const walletDoc = await transaction.get(walletRef);
+    
+    let currentBalance = 0;
+    if (walletDoc.exists) {
+      currentBalance = parseFloat(walletDoc.data()?.balance ?? "0");
+    }
+    
+    const adjustAmount = parseFloat(amount);
+    const newBalance = (currentBalance + adjustAmount).toFixed(2);
+    
+    transaction.set(walletRef, { balance: newBalance }, { merge: true });
+    
+    const txRef = walletRef.collection("transactions").doc();
+    transaction.set(txRef, {
+      type: adjustAmount >= 0 ? "deposit" : "withdrawal",
+      amount: String(Math.abs(adjustAmount)),
+      balanceAfter: newBalance,
+      description: description || "تعديل رصيد يدوي من الإدارة",
+      status: "completed",
+      createdAt: new Date().toISOString(),
+    });
   });
 }

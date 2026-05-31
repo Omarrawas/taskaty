@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router";
-import { Search, SlidersHorizontal, Grid3X3, List, Star, X } from "lucide-react";
+import { Search, SlidersHorizontal, Grid3X3, List, Star, X, Clock, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import ServiceCard from "@/components/cards/ServiceCard";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { trpc } from "@/providers/trpc";
+import { ServiceCardSkeleton } from "@/components/Skeleton";
 
 export default function Services() {
   const [searchParams] = useSearchParams();
@@ -19,12 +20,14 @@ export default function Services() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [minRating, setMinRating] = useState(0);
+  const [maxDeliveryTime, setMaxDeliveryTime] = useState<number | null>(null);
+  const [sellerLevel, setSellerLevel] = useState<string>("");
   const [sortBy, setSortBy] = useState<any>("popular");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const { data: categoriesData } = trpc.categories.list.useQuery();
-  const categories = categoriesData ?? [];
+  const categories = (categoriesData ?? []) as any[];
 
   const { data: servicesData, isLoading } = trpc.services.list.useQuery({
     categorySlug: selectedCategory || undefined,
@@ -35,7 +38,8 @@ export default function Services() {
     sort: sortBy,
   });
 
-  const filteredServices = servicesData?.rows ?? [];
+  const servicesResult = servicesData as any;
+  const filteredServices = servicesResult?.rows ?? [];
 
   const clearFilters = () => {
     setQuery("");
@@ -43,10 +47,13 @@ export default function Services() {
     setMinPrice("");
     setMaxPrice("");
     setMinRating(0);
+    setMaxDeliveryTime(null);
+    setSellerLevel("");
   };
 
   const activeFiltersCount = [
-    query, selectedCategory, minPrice, maxPrice, minRating > 0
+    query, selectedCategory, minPrice, maxPrice, minRating > 0, 
+    maxDeliveryTime !== null, sellerLevel
   ].filter(Boolean).length;
 
   return (
@@ -163,6 +170,58 @@ export default function Services() {
                   ))}
                 </div>
               </div>
+
+              {/* Delivery Time */}
+              <div className="mb-5">
+                <h4 className="text-sm font-semibold text-[#1A1A2E] mb-3">مدة التسليم</h4>
+                <div className="space-y-2">
+                  {[
+                    { value: 1, label: "خلال يوم واحد" },
+                    { value: 3, label: "خلال 3 أيام" },
+                    { value: 7, label: "خلال أسبوع" },
+                    { value: 14, label: "خلال أسبوعين" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setMaxDeliveryTime(maxDeliveryTime === option.value ? null : option.value)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        maxDeliveryTime === option.value
+                          ? "bg-[#E8F5F0] text-[#0D5D48] font-medium"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Clock className="w-4 h-4" />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seller Level */}
+              <div className="mb-5">
+                <h4 className="text-sm font-semibold text-[#1A1A2E] mb-3">مستوى البائع</h4>
+                <div className="space-y-2">
+                  {[
+                    { value: "top_rated", label: "بائع مميز" },
+                    { value: "level_two", label: "بائع مستوى 2" },
+                    { value: "level_one", label: "بائع مستوى 1" },
+                    { value: "new", label: "بائع جديد" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setSellerLevel(sellerLevel === option.value ? "" : option.value)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        sellerLevel === option.value
+                          ? "bg-[#E8F5F0] text-[#0D5D48] font-medium"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Award className="w-4 h-4" />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </aside>
 
@@ -171,7 +230,7 @@ export default function Services() {
             {/* Top Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <p className="text-sm text-gray-500">
-                نتائج البحث: <span className="font-semibold text-[#1A1A2E]">{servicesData?.total ?? 0}</span> خدمة
+                نتائج البحث: <span className="font-semibold text-[#1A1A2E]">{servicesResult?.total ?? 0}</span> خدمة
               </p>
 
               <div className="flex items-center gap-3">
@@ -254,6 +313,20 @@ export default function Services() {
                     <button onClick={() => setMinRating(0)}><X className="w-3 h-3" /></button>
                   </Badge>
                 )}
+                {maxDeliveryTime !== null && (
+                  <Badge variant="secondary" className="gap-1">
+                    تسليم خلال {maxDeliveryTime} أيام
+                    <button onClick={() => setMaxDeliveryTime(null)}><X className="w-3 h-3" /></button>
+                  </Badge>
+                )}
+                {sellerLevel && (
+                  <Badge variant="secondary" className="gap-1">
+                    {sellerLevel === "top_rated" ? "بائع مميز" : 
+                     sellerLevel === "level_two" ? "بائع مستوى 2" :
+                     sellerLevel === "level_one" ? "بائع مستوى 1" : "بائع جديد"}
+                    <button onClick={() => setSellerLevel("")}><X className="w-3 h-3" /></button>
+                  </Badge>
+                )}
               </div>
             )}
 
@@ -261,7 +334,7 @@ export default function Services() {
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {Array.from({ length: 9 }).map((_, i) => (
-                  <div key={i} className="h-72 bg-white rounded-2xl animate-pulse" />
+                  <ServiceCardSkeleton key={i} />
                 ))}
               </div>
             ) : filteredServices.length > 0 ? (
@@ -269,7 +342,7 @@ export default function Services() {
                 ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
                 : "space-y-4"
               }>
-                {filteredServices.map((service: any, i) => (
+                {filteredServices.map((service: any, i: number) => (
                   <div
                     key={service.id}
                     className="animate-fade-in-up"
@@ -286,6 +359,7 @@ export default function Services() {
                       totalReviews={service.totalReviews}
                       featured={service.featured}
                       deliveryTime={service.deliveryTime}
+                      categorySlug={service.categorySlug}
                     />
                   </div>
                 ))}

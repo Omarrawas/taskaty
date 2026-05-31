@@ -4,15 +4,18 @@ import './index.css'
 import { TRPCProvider } from "@/providers/trpc"
 import { AuthProvider } from "@/providers/AuthProvider"
 import { Toaster } from "sonner"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
-  <HashRouter>
-    <TRPCProvider>
-      <AuthProvider>
-        <App />
-        <Toaster position="top-center" richColors />
-      </AuthProvider>
-    </TRPCProvider>
-  </HashRouter>,
+  <ErrorBoundary>
+    <HashRouter>
+      <TRPCProvider>
+        <AuthProvider>
+          <App />
+          <Toaster position="top-center" richColors />
+        </AuthProvider>
+      </TRPCProvider>
+    </HashRouter>
+  </ErrorBoundary>,
 )

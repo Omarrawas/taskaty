@@ -22,9 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseLoaded, setFirebaseLoaded] = useState(false);
 
   useEffect(() => {
-    console.log("[AuthProvider] Initializing onAuthStateChanged listener...");
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[AuthProvider] onAuthStateChanged fired. User:", user?.email || "null");
       setFirebaseUser(user);
       setFirebaseLoaded(true);
     });
@@ -42,15 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     enabled: firebaseLoaded && !!firebaseUser,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: async () => {
-      await utils.invalidate();
-    },
-  });
-
   const logout = async () => {
     await auth.signOut();
-    await logoutMutation.mutateAsync();
+    await utils.invalidate();
   };
 
   const user = dbUser ?? (firebaseUser ? ({ 
@@ -61,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     avatar: firebaseUser.photoURL 
   } as any) : null);
 
-  const isLoading = (!firebaseLoaded) || (apiLoading && !!firebaseUser) || logoutMutation.isPending;
+  const isLoading = (!firebaseLoaded) || (apiLoading && !!firebaseUser);
 
   const value = useMemo(() => ({
     user,

@@ -11,10 +11,8 @@ let instance: any;
 export function getDb() {
   if (!instance) {
     const url = env.databaseUrl;
-    console.log("[DB] Initializing connection...");
     
     if (!url) {
-      console.error("[DB] Missing DATABASE_URL!");
       throw new Error("DATABASE_URL is missing.");
     }
     
@@ -36,9 +34,7 @@ export function getDb() {
         mode: "default",
         schema: fullSchema,
       });
-      console.log("[DB] Drizzle instance created.");
     } catch (err: any) {
-      console.error("[DB] Failed to create instance:", err.message);
       throw err;
     }
   }

@@ -9,7 +9,6 @@ import { env } from "./lib/env";
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use("*", async (c, next) => {
-  console.log(`[v2] Request: ${c.req.method} ${c.req.url}`);
   c.res.headers.set("Cross-Origin-Opener-Policy", "unsafe-none");
   c.res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   await next();
@@ -17,11 +16,9 @@ app.use("*", async (c, next) => {
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.onError((err, c) => {
-  console.error("[CRITICAL HONO ERROR]", err);
   return c.json({ 
     error: "Server Error", 
-    message: err.message,
-    ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {})
+    message: "An unexpected error occurred",
   }, 500);
 });
 
@@ -37,11 +34,9 @@ app.all("/api/trpc/*", async (c) => {
       createContext,
     });
   } catch (err: any) {
-    console.error("[tRPC Handler Error]", err);
     return c.json({ 
       error: "Internal Protocol Error", 
-      message: err.message,
-      details: typeof err === 'object' ? JSON.stringify(err) : String(err)
+      message: "An unexpected error occurred",
     }, 500);
   }
 });
@@ -59,6 +54,6 @@ if (env.isProduction && !process.env.VERCEL) {
 
   const port = parseInt(process.env.PORT || "3000");
   serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    // Server started
   });
 }

@@ -1,105 +1,126 @@
-import { eq, and, desc, or } from "drizzle-orm";
-import { getDb } from "./connection";
-import * as schema from "../../db/schema";
+import { db } from "../lib/firebase-admin";
+import { COLLECTIONS } from "../lib/firestore-utils";
+import { createNotification } from "./notifications";
 
-export async function listConversations(userId: number) {
-  const db = getDb();
-  return db
-    .select({
-      id: schema.conversations.id,
-      orderId: schema.conversations.orderId,
-      buyerId: schema.conversations.buyerId,
-      sellerId: schema.conversations.sellerId,
-      lastMessage: schema.conversations.lastMessage,
-      lastMessageAt: schema.conversations.lastMessageAt,
-      createdAt: schema.conversations.createdAt,
-      otherName: schema.users.name,
-      otherAvatar: schema.users.avatar,
-    })
-    .from(schema.conversations)
-    .innerJoin(
-      schema.users,
-      or(
-        and(
-          eq(schema.conversations.buyerId, userId),
-          eq(schema.users.id, schema.conversations.sellerId),
-        ),
-        and(
-          eq(schema.conversations.sellerId, userId),
-          eq(schema.users.id, schema.conversations.buyerId),
-        ),
-      ),
-    )
-    .where(
-      or(
-        eq(schema.conversations.buyerId, userId),
-        eq(schema.conversations.sellerId, userId),
-      ),
-    )
-    .orderBy(desc(schema.conversations.lastMessageAt));
-}
-
-export async function findOrCreateConversation(participantA: number, participantB: number) {
-  const db = getDb();
-  const [buyerId, sellerId] = participantA < participantB ? [participantA, participantB] : [participantB, participantA];
-
-  const existing = await db
-    .select()
-    .from(schema.conversations)
-    .where(
-      and(
-        eq(schema.conversations.buyerId, buyerId),
-        eq(schema.conversations.sellerId, sellerId),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) return existing[0];
-
-  const [result] = await db.insert(schema.conversations).values({
-    buyerId,
-    sellerId,
-  });
+export async function listConversations(userId: string) {
+  if (!db) return [];
   
-  const created = await db
-    .select()
-    .from(schema.conversations)
-    .where(eq(schema.conversations.id, result.insertId))
-    .limit(1);
+  // In Firestore, we query conversations where the user is a participant
+  // Since we don't have an array of members yet, let's look at buyerId or sellerId
+  const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS)
+    .where("participants", "array-contains", userId)
+    .orderBy("lastMessageAt", "desc")
+    .get();
     
-  return created[0];
+  const results = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const otherId = data.buyerId === userId ? data.sellerId : data.buyerId;
+    const userDoc = await db!.collection(COLLECTIONS.USERS).doc(otherId).get();
+    const userData = userDoc.data();
+    
+    return {
+      id: doc.id,
+      ...data,
+      otherName: userData?.name,
+      otherAvatar: userData?.avatar,
+    };
+  }));
+  
+  return results;
 }
 
-export async function listMessages(conversationId: number, limit = 50) {
-  return getDb()
-    .select({
-      id: schema.messages.id,
-      content: schema.messages.content,
-      isRead: schema.messages.isRead,
-      createdAt: schema.messages.createdAt,
-      senderId: schema.messages.senderId,
-      senderName: schema.users.name,
-      senderAvatar: schema.users.avatar,
-    })
-    .from(schema.messages)
-    .innerJoin(schema.users, eq(schema.users.id, schema.messages.senderId))
-    .where(eq(schema.messages.conversationId, conversationId))
-    .orderBy(desc(schema.messages.createdAt))
-    .limit(limit);
+export async function findOrCreateConversation(participantA: string, participantB: string) {
+  if (!db) return null;
+  const ids = [participantA, participantB].sort();
+  const convId = ids.join("_");
+  
+  const convRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(convId);
+  const doc = await convRef.get();
+  
+  if (doc.exists) return { id: doc.id, ...doc.data() };
+  
+  const newConv = {
+    buyerId: ids[0],
+    sellerId: ids[1],
+    participants: ids,
+    createdAt: new Date().toISOString(),
+    lastMessage: "",
+    lastMessageAt: new Date().toISOString(),
+  };
+  
+  await convRef.set(newConv);
+  return { id: convId, ...newConv };
+}
+
+export async function listMessages(conversationId: string, limit = 50) {
+  if (!db) return [];
+  const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId)
+    .collection("messages")
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+    
+  const messages = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const userDoc = await db!.collection(COLLECTIONS.USERS).doc(data.senderId).get();
+    const userData = userDoc.data();
+    
+    return {
+      id: doc.id,
+      ...data,
+      senderName: userData?.name,
+      senderAvatar: userData?.avatar,
+    };
+  }));
+  
+  return messages;
 }
 
 export async function createMessage(data: {
-  conversationId: number;
-  senderId: number;
+  conversationId: string;
+  senderId: string;
   content: string;
 }) {
-  const db = getDb();
-  await db.insert(schema.messages).values(data);
-  await db
-    .update(schema.conversations)
-    .set({
-      lastMessage: data.content.substring(0, 100),
-      lastMessageAt: new Date(),
-    })
-    .where(eq(schema.conversations.id, data.conversationId));
+  if (!db) return;
+  
+  const batch = db.batch();
+  
+  const msgRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(data.conversationId)
+    .collection("messages").doc();
+    
+  batch.set(msgRef, {
+    senderId: data.senderId,
+    content: data.content,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  });
+  
+  const convRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(data.conversationId);
+  batch.update(convRef, {
+    lastMessage: data.content.substring(0, 100),
+    lastMessageAt: new Date().toISOString(),
+  });
+  
+  await batch.commit();
+
+  // Get conversation to find receiver
+  const convDoc = await db.collection(COLLECTIONS.CONVERSATIONS).doc(data.conversationId).get();
+  const convData = convDoc.data();
+  
+  if (convData) {
+    const receiverId = convData.buyerId === data.senderId ? convData.sellerId : convData.buyerId;
+    
+    // Get sender name
+    const senderDoc = await db.collection(COLLECTIONS.USERS).doc(data.senderId).get();
+    const senderName = senderDoc.data()?.name || "مستخدم";
+    
+    // Send notification to receiver
+    await createNotification(receiverId, {
+      message: `رسالة جديدة من ${senderName}`,
+      title: "رسالة جديدة",
+      type: "message",
+      referenceId: data.conversationId,
+      referenceType: "conversation",
+    });
+  }
 }

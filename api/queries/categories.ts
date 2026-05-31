@@ -1,37 +1,33 @@
-import { eq, and, sql } from "drizzle-orm";
-import { getDb } from "./connection";
-import * as schema from "../../db/schema";
+import { db } from "../lib/firebase-admin";
+import { COLLECTIONS } from "../lib/firestore-utils";
 
 export async function listCategories() {
-  const rows = await getDb()
-    .select({
-      id: schema.categories.id,
-      nameAr: schema.categories.nameAr,
-      slug: schema.categories.slug,
-      icon: schema.categories.icon,
-      sortOrder: schema.categories.sortOrder,
-      serviceCount: sql<number>`count(${schema.services.id})`,
-    })
-    .from(schema.categories)
-    .leftJoin(
-      schema.services,
-      and(
-        eq(schema.services.categoryId, schema.categories.id),
-        eq(schema.services.status, "active"),
-      ),
-    )
-    .where(eq(schema.categories.isActive, true))
-    .groupBy(schema.categories.id)
-    .orderBy(schema.categories.sortOrder);
+  if (!db) return [];
+  
+  const snapshot = await db.collection(COLLECTIONS.CATEGORIES)
+    .where("isActive", "==", true)
+    .orderBy("sortOrder")
+    .get();
+    
+  const categories = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
 
-  return rows;
+  // Note: in Firestore, we usually store the serviceCount on the category document itself
+  // to avoid expensive aggregations on every request.
+  return categories;
 }
 
 export async function findCategoryBySlug(slug: string) {
-  const rows = await getDb()
-    .select()
-    .from(schema.categories)
-    .where(eq(schema.categories.slug, slug))
-    .limit(1);
-  return rows.at(0);
+  if (!db) return null;
+  
+  const snapshot = await db.collection(COLLECTIONS.CATEGORIES)
+    .where("slug", "==", slug)
+    .limit(1)
+    .get();
+    
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
 }
